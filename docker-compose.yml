@@ -3,74 +3,64 @@ version: '3.8'
 services:
   # MongoDB Database
   mongodb:
-    image: mongo:6
+    image: mongo:7
     container_name: continental-mongodb
-    restart: always
-    ports:
-      - "27017:27017"
+    restart: unless-stopped
     volumes:
       - mongodb_data:/data/db
     environment:
       - MONGO_INITDB_DATABASE=continental_academy
     networks:
       - continental-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Backend API (FastAPI)
+  # FastAPI Backend
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.backend
     container_name: continental-backend
-    restart: always
-    ports:
-      - "8001:8001"
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
     environment:
       - MONGO_URL=mongodb://mongodb:27017
       - DB_NAME=continental_academy
-      - JWT_SECRET=${JWT_SECRET:-continental-academy-secret-key-2024-secure}
-      - STRIPE_API_KEY=${STRIPE_API_KEY:-sk_test_your_key}
+      - JWT_SECRET=${JWT_SECRET:-continental-academy-secret-key-2024-production}
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
-    depends_on:
-      - mongodb
+      - STRIPE_API_KEY=${STRIPE_API_KEY:-sk_test_emergent}
     networks:
       - continental-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # Frontend (React)
+  # React Frontend with Nginx
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.frontend
       args:
-        - REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL:-http://localhost:8001}
+        - REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL:-http://localhost}
     container_name: continental-frontend
-    restart: always
-    ports:
-      - "3000:3000"
+    restart: unless-stopped
     depends_on:
       - backend
-    networks:
-      - continental-network
-
-  # Nginx Reverse Proxy (Optional - for production)
-  nginx:
-    image: nginx:alpine
-    container_name: continental-nginx
-    restart: always
     ports:
       - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - frontend
-      - backend
     networks:
       - continental-network
-
-volumes:
-  mongodb_data:
 
 networks:
   continental-network:
     driver: bridge
+
+volumes:
+  mongodb_data:
