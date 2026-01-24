@@ -465,7 +465,7 @@ async def create_checkout(data: PaymentCreate, request: Request, user: dict = De
     stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
     
     success_url = f"{data.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"{data.origin_url}/pricing"
+    cancel_url = f"{data.origin_url}/courses"
     
     checkout_request = CheckoutSessionRequest(
         amount=plan['price'],
@@ -491,6 +491,59 @@ async def create_checkout(data: PaymentCreate, request: Request, user: dict = De
         "amount": plan['price'],
         "currency": "eur",
         "payment_status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.payment_transactions.insert_one(transaction)
+    
+    return {"url": session.url, "session_id": session.session_id}
+
+@api_router.post("/payments/course")
+async def purchase_course(data: CoursePurchase, request: Request, user: dict = Depends(get_current_user)):
+    # Check if course exists
+    course = await db.courses.find_one({"id": data.course_id}, {"_id": 0})
+    if not course:
+        raise HTTPException(status_code=404, detail="Kurs nije pronađen")
+    
+    # Check if already purchased
+    existing = await db.user_courses.find_one({"user_id": user['id'], "course_id": data.course_id})
+    if existing:
+        raise HTTPException(status_code=400, detail="Već ste kupili ovaj kurs")
+    
+    host_url = str(request.base_url).rstrip('/')
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    
+    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    
+    success_url = f"{data.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}&type=course"
+    cancel_url = f"{data.origin_url}/courses/{data.course_id}"
+    
+    checkout_request = CheckoutSessionRequest(
+        amount=course['price'],
+        currency="eur",
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={
+            "user_id": user['id'],
+            "course_id": data.course_id,
+            "user_email": user['email'],
+            "type": "course"
+        }
+    )
+    
+    session = await stripe_checkout.create_checkout_session(checkout_request)
+    
+    # Create transaction record
+    transaction = {
+        "id": str(uuid.uuid4()),
+        "session_id": session.session_id,
+        "user_id": user['id'],
+        "user_email": user['email'],
+        "course_id": data.course_id,
+        "course_title": course['title'],
+        "amount": course['price'],
+        "currency": "eur",
+        "payment_status": "pending",
+        "type": "course",
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.payment_transactions.insert_one(transaction)
