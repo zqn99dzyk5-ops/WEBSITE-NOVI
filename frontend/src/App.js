@@ -8,6 +8,7 @@ import { Toaster } from "./components/ui/sonner";
 import HomePage from "./pages/HomePage";
 import CoursesPage from "./pages/CoursesPage";
 import CourseDetailPage from "./pages/CourseDetailPage";
+import ShopPage from "./pages/ShopPage";
 import PricingPage from "./pages/PricingPage";
 import AboutPage from "./pages/AboutPage";
 import ContactPage from "./pages/ContactPage";
