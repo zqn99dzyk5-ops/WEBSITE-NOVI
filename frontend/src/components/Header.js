@@ -47,10 +47,15 @@ export const Header = () => {
   return (
     <header
       data-testid="main-header"
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled ? 'glass' : 'bg-transparent'
-      }`}
+      className="fixed top-0 left-0 right-0 z-50 bg-[#0a0a0a] border-b border-white/5"
+      style={{
+        boxShadow: '0 4px 30px rgba(0, 0, 0, 0.8), 0 1px 3px rgba(0, 0, 0, 0.5)'
+      }}
     >
+      {/* Bottom glow effect */}
+      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      <div className="absolute -bottom-8 left-0 right-0 h-8 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
+      
       <div className="container-custom">
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
