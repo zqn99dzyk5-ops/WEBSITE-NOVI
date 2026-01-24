@@ -558,7 +558,7 @@ async def get_payment_status(session_id: str, request: Request):
     stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
     status = await stripe_checkout.get_checkout_status(session_id)
     
-    # Update transaction and user subscription if paid
+    # Update transaction and user if paid
     if status.payment_status == "paid":
         transaction = await db.payment_transactions.find_one({"session_id": session_id})
         if transaction and transaction.get('payment_status') != 'paid':
@@ -566,10 +566,25 @@ async def get_payment_status(session_id: str, request: Request):
                 {"session_id": session_id},
                 {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}}
             )
-            await db.users.update_one(
-                {"id": transaction['user_id']},
-                {"$set": {"subscription_status": "active"}}
-            )
+            
+            # Check if this is a course purchase
+            if transaction.get('type') == 'course' and transaction.get('course_id'):
+                # Add course to user's purchased courses
+                await db.user_courses.update_one(
+                    {"user_id": transaction['user_id'], "course_id": transaction['course_id']},
+                    {"$set": {
+                        "user_id": transaction['user_id'],
+                        "course_id": transaction['course_id'],
+                        "purchased_at": datetime.now(timezone.utc).isoformat()
+                    }},
+                    upsert=True
+                )
+            else:
+                # Subscription purchase - activate subscription
+                await db.users.update_one(
+                    {"id": transaction['user_id']},
+                    {"$set": {"subscription_status": "active"}}
+                )
     
     return {
         "status": status.status,
@@ -577,6 +592,22 @@ async def get_payment_status(session_id: str, request: Request):
         "amount_total": status.amount_total,
         "currency": status.currency
     }
+
+@api_router.get("/user/courses")
+async def get_user_courses(user: dict = Depends(get_current_user)):
+    """Get courses purchased by the current user"""
+    # Get all purchased course IDs
+    user_courses = await db.user_courses.find({"user_id": user['id']}, {"_id": 0}).to_list(100)
+    course_ids = [uc['course_id'] for uc in user_courses]
+    
+    # Get course details
+    courses = []
+    for course_id in course_ids:
+        course = await db.courses.find_one({"id": course_id}, {"_id": 0})
+        if course:
+            courses.append(course)
+    
+    return courses
 
 @api_router.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
