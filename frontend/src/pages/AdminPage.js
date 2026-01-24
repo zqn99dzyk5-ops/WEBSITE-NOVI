@@ -51,12 +51,15 @@ export default function AdminPage() {
   const headers = { Authorization: `Bearer ${token}` };
 
   useEffect(() => {
+    // Wait for auth to finish loading
+    if (authLoading) return;
+    
     if (!user || user.role !== 'admin') {
       navigate('/');
       return;
     }
     fetchAllData();
-  }, [user, token, navigate]);
+  }, [user, token, navigate, authLoading]);
 
   const fetchAllData = async () => {
     setLoading(true);
