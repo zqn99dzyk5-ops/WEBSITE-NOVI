@@ -1,0 +1,161 @@
+{
+  "brand": {
+    "name": "Continental Academy",
+    "identity": "Premium Education Platform for Young Entrepreneurs",
+    "vibe": "Futuristic, Wealth, High-Energy, Dark Mode",
+    "language": "Bosnian"
+  },
+  "theme": {
+    "mode": "dark",
+    "background": "#000000",
+    "primary": "#FF4500",
+    "secondary": "#FF1493",
+    "accent": "#FF69B4"
+  },
+  "typography": {
+    "headings": {
+      "font_family": "Unbounded, sans-serif",
+      "weights": ["700", "900"],
+      "usage": "Hero titles, Section headers, Big numbers"
+    },
+    "body": {
+      "font_family": "Manrope, sans-serif",
+      "weights": ["400", "500", "600"],
+      "usage": "Paragraphs, UI elements, Buttons"
+    }
+  },
+  "colors": {
+    "palette": {
+      "background": {
+        "default": "#000000",
+        "paper": "#0A0A0A",
+        "subtle": "#121212"
+      },
+      "text": {
+        "primary": "#FFFFFF",
+        "secondary": "#A1A1AA",
+        "muted": "#52525B"
+      },
+      "brand": {
+        "orange": "#FF4500",
+        "pink": "#FF1493",
+        "gradient": "linear-gradient(135deg, #FF4500 0%, #FF1493 100%)"
+      },
+      "border": {
+        "default": "rgba(255, 255, 255, 0.1)",
+        "active": "rgba(255, 69, 0, 0.5)"
+      }
+    }
+  },
+  "ui_rules": {
+    "glassmorphism": {
+      "header": "bg-black/50 backdrop-blur-xl border-b border-white/10",
+      "card": "bg-white/5 backdrop-blur-md border border-white/10 hover:border-white/20 transition-all duration-300"
+    },
+    "spacing": {
+      "container_padding": "px-6 md:px-12 lg:px-24",
+      "section_gap": "py-24 md:py-32"
+    },
+    "borders": {
+      "radius": "rounded-xl",
+      "width": "border"
+    },
+    "shadows": {
+      "glow": "0 0 20px rgba(255, 69, 0, 0.3)",
+      "glow_hover": "0 0 40px rgba(255, 20, 147, 0.5)"
+    }
+  },
+  "components": {
+    "header": {
+      "style": "Fixed, Transparent, Glassmorphism",
+      "elements": ["Logo", "Nav Links (Početna, Kursevi, Cjenovnik, O nama)", "Auth Buttons (Prijava, Registracija)"],
+      "behavior": "Sticky top-0, z-50. Content scrolls BEHIND it."
+    },
+    "hero": {
+      "layout": "Centered text + Video Box",
+      "elements": [
+        "H1: Large, Gradient Text (Orange-Pink)",
+        "Subtext: White/Grey",
+        "CTA Button: Gradient Background, Pill shape",
+        "Video Container: Mux Player with 'Glow' border effect"
+      ]
+    },
+    "courses_grid": {
+      "style": "Bento Grid or 3-column Grid",
+      "card_style": "Dark card, Image top, Title, Price, 'Enroll' button",
+      "hover": "Scale up slightly, border glow"
+    },
+    "stats": {
+      "style": "Large numbers, gradient text",
+      "layout": "Flex row or Grid"
+    },
+    "footer": {
+      "style": "Massive, Dark, Simple Links",
+      "elements": ["Logo", "Socials", "Legal Links", "Copyright"]
+    }
+  },
+  "image_urls": {
+    "hero_bg": "https://images.unsplash.com/photo-1735473924766-2ffac80b719e?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "abstract_shape": "https://images.unsplash.com/photo-1763929154709-f13315fbcec4?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "course_thumbnails": [
+      "https://images.unsplash.com/photo-1643962579745-bcaa05ffc573?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "https://images.unsplash.com/photo-1648098893250-1d03dce92467?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "https://images.unsplash.com/photo-1643962579365-3a9222e923b8?crop=entropy&cs=srgb&fm=jpg&q=85"
+    ],
+    "results_gallery": [
+      "https://images.unsplash.com/photo-1492337034744-218795d77f43?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "https://images.unsplash.com/photo-1630941697803-5eec7b685a72?crop=entropy&cs=srgb&fm=jpg&q=85"
+    ]
+  },
+  "translations": {
+    "nav": {
+      "home": "Početna",
+      "courses": "Kursevi",
+      "pricing": "Cjenovnik",
+      "about": "O nama",
+      "contact": "Kontakt",
+      "login": "Prijava",
+      "register": "Registracija"
+    },
+    "hero": {
+      "cta": "Započni Odmah",
+      "watch_video": "Pogledaj Video"
+    },
+    "sections": {
+      "why_us": "Zašto Continental?",
+      "results": "Rezultati Polaznika",
+      "faq": "Česta Pitanja",
+      "footer_rights": "Sva prava zadržana"
+    }
+  },
+  "instructions_to_main_agent": [
+    "1. SETUP: Install 'lucide-react' for icons, 'framer-motion' for animations, 'clsx' and 'tailwind-merge' for utils.",
+    "2. THEME: Override 'index.css' root variables to force DARK MODE by default. Set --background to 0 0% 0%.",
+    "3. FONTS: Import 'Unbounded' and 'Manrope' from Google Fonts in index.css.",
+    "4. HEADER: Ensure the header is fixed and has a high z-index (50). Use 'backdrop-blur-xl' for the glass effect.",
+    "5. GRADIENTS: Use the Orange-Pink gradient (#FF4500 -> #FF1493) for primary buttons and text highlights.",
+    "6. LANGUAGE: Use the provided BOSNIAN translations for all UI text.",
+    "7. ADMIN: The Admin panel should be functional but keep the same dark aesthetic.",
+    "8. MUX: Use a placeholder video ID if Mux is not configured, but build the component ready for it."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy",
+    "Use glass-morphism effects with backdrop filters (12-24px blur)",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯📚🎭🎬🎪🎉🎊🎁🎀🎂🍰🎈🎨🎰💰💵💳🏦💎🪙💸🤑📊📈📉💹🔢🏆🥇 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN",
+    "Prioritize using pre-existing components from src/components/ui when applicable",
+    "Create new components that match the style and conventions of existing components when needed",
+    "Examine existing components to understand the project's component patterns before creating new ones",
+    "Components MUST use named exports (export const ComponentName = ...)",
+    "Pages MUST use default exports (export default function PageName() {...})",
+    "Use 'sonner' for toasts. Sonner component are located in /app/src/components/ui/sonner.tsx"
+  ]
+}
