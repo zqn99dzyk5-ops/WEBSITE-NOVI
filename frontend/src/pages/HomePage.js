@@ -41,7 +41,6 @@ export default function HomePage() {
   const [faqs, setFaqs] = useState([]);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [videoPlaying, setVideoPlaying] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
