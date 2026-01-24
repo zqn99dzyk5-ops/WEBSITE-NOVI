@@ -751,6 +751,7 @@ async def seed_initial_data():
             "id": "main",
             "hero_title": "Zaradi Sa Nama",
             "hero_subtitle": "Nauči vještine koje će promijeniti tvoj život i finansijsku budućnost",
+            "hero_image": "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=1920",
             "intro_video_mux_id": "",
             "why_us_title": "Zašto Baš Continental Academy?",
             "why_us_points": [
@@ -768,6 +769,7 @@ async def seed_initial_data():
             "nav_links": [
                 {"label": "Početna", "href": "/"},
                 {"label": "Kursevi", "href": "/courses"},
+                {"label": "Shop", "href": "/shop"},
                 {"label": "Cjenovnik", "href": "/pricing"},
                 {"label": "O nama", "href": "/about"},
                 {"label": "Kontakt", "href": "/contact"}
