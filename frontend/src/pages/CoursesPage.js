@@ -59,7 +59,7 @@ export default function CoursesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black pt-24 pb-16" data-testid="courses-page">
+    <div className="min-h-screen bg-black pt-28 pb-16" data-testid="courses-page">
       <div className="container-custom">
         {/* Header */}
         <motion.div

@@ -39,7 +39,7 @@ export default function FAQPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black pt-24 pb-16" data-testid="faq-page">
+    <div className="min-h-screen bg-black pt-28 pb-16" data-testid="faq-page">
       <div className="container-custom">
         {/* Header */}
         <motion.div

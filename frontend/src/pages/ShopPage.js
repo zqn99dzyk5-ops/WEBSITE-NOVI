@@ -86,7 +86,7 @@ export default function ShopPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] pt-24 pb-16" data-testid="shop-page">
+    <div className="min-h-screen bg-[#0a0a0a] pt-28 pb-16" data-testid="shop-page">
       {/* Background Glows */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-20 right-20 w-[400px] h-[400px] bg-[#FF4500]/20 rounded-full blur-[150px]" />

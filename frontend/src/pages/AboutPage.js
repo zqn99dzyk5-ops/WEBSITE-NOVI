@@ -13,7 +13,7 @@ export default function AboutPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black pt-24 pb-16" data-testid="about-page">
+    <div className="min-h-screen bg-black pt-28 pb-16" data-testid="about-page">
       <div className="container-custom">
         {/* Header */}
         <motion.div

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-black pt-24 pb-16" data-testid="terms-page">
+    <div className="min-h-screen bg-black pt-28 pb-16" data-testid="terms-page">
       <div className="container-custom">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
