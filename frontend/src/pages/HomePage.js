@@ -100,11 +100,11 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]" data-testid="home-page">
-      {/* Hero Section with Background Image */}
-      <section className="relative min-h-screen flex items-center" data-testid="hero-section">
-        {/* Background Image */}
+      {/* Hero Section - starts below header */}
+      <section className="relative min-h-screen flex items-center pt-20" data-testid="hero-section">
+        {/* Background Image - starts below header */}
         {settings?.hero_image && (
-          <div className="absolute inset-0">
+          <div className="absolute top-20 left-0 right-0 bottom-0">
             <img 
               src={settings.hero_image} 
               alt="Hero Background"
@@ -116,12 +116,12 @@ export default function HomePage() {
 
         {/* Glow Effects */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-20 left-10 w-[500px] h-[500px] bg-[#FF4500]/30 rounded-full blur-[180px] animate-pulse" />
-          <div className="absolute top-40 right-20 w-[400px] h-[400px] bg-[#FF1493]/25 rounded-full blur-[150px] animate-pulse" style={{ animationDelay: '1s' }} />
+          <div className="absolute top-32 left-10 w-[500px] h-[500px] bg-[#FF4500]/30 rounded-full blur-[180px] animate-pulse" />
+          <div className="absolute top-52 right-20 w-[400px] h-[400px] bg-[#FF1493]/25 rounded-full blur-[150px] animate-pulse" style={{ animationDelay: '1s' }} />
           <div className="absolute bottom-20 left-1/3 w-[600px] h-[300px] bg-[#FF6B35]/20 rounded-full blur-[200px]" />
         </div>
 
-        <div className="container-custom relative z-10 pt-24">
+        <div className="container-custom relative z-10 pt-16">
           <div className="max-w-4xl mx-auto text-center">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
