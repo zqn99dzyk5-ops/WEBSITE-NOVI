@@ -328,6 +328,9 @@ export default function AdminPage() {
             <TabsTrigger value="results" className="data-[state=active]:bg-white/10 rounded-lg px-4 py-2">
               Rezultati
             </TabsTrigger>
+            <TabsTrigger value="shop" className="data-[state=active]:bg-white/10 rounded-lg px-4 py-2">
+              Shop
+            </TabsTrigger>
             <TabsTrigger value="messages" className="data-[state=active]:bg-white/10 rounded-lg px-4 py-2">
               Poruke
             </TabsTrigger>
