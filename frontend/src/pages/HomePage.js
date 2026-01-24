@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axios from 'axios';
+import MuxPlayer from '@mux/mux-player-react';
 import { 
   Play, 
   ArrowRight, 
@@ -205,27 +206,18 @@ export default function HomePage() {
                 Pogledaj <span className="gradient-text">Intro Video</span>
               </h2>
               <div className="relative rounded-2xl overflow-hidden border border-[#FF4500]/30 shadow-[0_0_60px_rgba(255,69,0,0.3)]">
-                <div className="aspect-video bg-black">
-                  {videoPlaying ? (
-                    <iframe
-                      src={`https://stream.mux.com/${settings.intro_video_mux_id}.m3u8`}
-                      className="w-full h-full"
-                      allowFullScreen
-                    />
-                  ) : (
-                    <div className="relative w-full h-full">
-                      <div className="absolute inset-0 bg-gradient-to-br from-[#FF4500]/20 to-[#FF1493]/20" />
-                      <button 
-                        onClick={() => setVideoPlaying(true)}
-                        className="absolute inset-0 flex items-center justify-center group"
-                      >
-                        <div className="w-24 h-24 rounded-full bg-gradient-to-r from-[#FF4500] to-[#FF1493] flex items-center justify-center shadow-[0_0_50px_rgba(255,69,0,0.6)] group-hover:scale-110 transition-transform">
-                          <Play size={40} className="ml-2 text-white" />
-                        </div>
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <MuxPlayer
+                  playbackId={settings.intro_video_mux_id}
+                  metadata={{
+                    video_title: "Continental Academy Intro",
+                    viewer_user_id: "anonymous"
+                  }}
+                  accentColor="#FF4500"
+                  primaryColor="#FFFFFF"
+                  secondaryColor="#050505"
+                  style={{ aspectRatio: '16/9', width: '100%' }}
+                  streamType="on-demand"
+                />
               </div>
             </motion.div>
           </div>
