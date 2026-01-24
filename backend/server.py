@@ -156,6 +156,10 @@ class PaymentCreate(BaseModel):
     plan_id: str
     origin_url: str
 
+class CoursePurchase(BaseModel):
+    course_id: str
+    origin_url: str
+
 class ContactMessage(BaseModel):
     name: str
     email: EmailStr
