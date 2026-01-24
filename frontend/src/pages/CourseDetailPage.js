@@ -3,8 +3,9 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { Play, Lock, ArrowLeft, BookOpen, Clock, CheckCircle } from 'lucide-react';
+import { Play, Lock, ArrowLeft, BookOpen, CheckCircle, ShoppingCart } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import { toast } from 'sonner';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -15,13 +16,28 @@ export default function CourseDetailPage() {
   const { user, token } = useAuth();
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [purchasing, setPurchasing] = useState(false);
+  const [isPurchased, setIsPurchased] = useState(false);
 
   useEffect(() => {
-    const fetchCourse = async () => {
+    const fetchData = async () => {
       try {
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const response = await axios.get(`${API}/courses/${id}`, { headers });
-        setCourse(response.data);
+        const [courseRes] = await Promise.all([
+          axios.get(`${API}/courses/${id}`, { headers })
+        ]);
+        setCourse(courseRes.data);
+
+        // Check if user has purchased this course
+        if (token) {
+          try {
+            const purchasedRes = await axios.get(`${API}/user/courses`, { headers });
+            const purchasedIds = purchasedRes.data.map(c => c.id);
+            setIsPurchased(purchasedIds.includes(id));
+          } catch (e) {
+            console.error('Error checking purchases:', e);
+          }
+        }
       } catch (error) {
         console.error('Error fetching course:', error);
         navigate('/courses');
@@ -29,26 +45,63 @@ export default function CourseDetailPage() {
         setLoading(false);
       }
     };
-    fetchCourse();
+    fetchData();
   }, [id, token, navigate]);
+
+  const handlePurchase = async () => {
+    if (!user) {
+      navigate('/auth/login');
+      return;
+    }
+
+    setPurchasing(true);
+    try {
+      const response = await axios.post(
+        `${API}/payments/course`,
+        {
+          course_id: id,
+          origin_url: window.location.origin
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (response.data.url) {
+        window.location.href = response.data.url;
+      }
+    } catch (error) {
+      console.error('Error purchasing course:', error);
+      if (error.response?.data?.detail === 'Već ste kupili ovaj kurs') {
+        toast.info('Već ste kupili ovaj kurs!');
+        setIsPurchased(true);
+      } else {
+        toast.error('Greška pri kupovini. Pokušajte ponovo.');
+      }
+    } finally {
+      setPurchasing(false);
+    }
+  };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black pt-20">
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a] pt-20">
         <div className="w-16 h-16 rounded-full border-4 border-white/10 border-t-[#FF4500] animate-spin" />
       </div>
     );
   }
 
-  if (!course) {
-    return null;
-  }
+  if (!course) return null;
 
-  const canAccess = course.can_access;
+  const canAccess = course.can_access || isPurchased || course.is_free;
 
   return (
-    <div className="min-h-screen bg-black pt-24 pb-16" data-testid="course-detail-page">
-      <div className="container-custom">
+    <div className="min-h-screen bg-[#0a0a0a] pt-28 pb-16" data-testid="course-detail-page">
+      {/* Background Glow */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-40 right-20 w-[400px] h-[400px] bg-[#FF4500]/15 rounded-full blur-[150px]" />
+        <div className="absolute bottom-40 left-20 w-[400px] h-[400px] bg-[#FF1493]/15 rounded-full blur-[150px]" />
+      </div>
+
+      <div className="container-custom relative z-10">
         {/* Back Button */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
@@ -92,7 +145,7 @@ export default function CourseDetailPage() {
                       />
                       <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                         <div className="text-center">
-                          <div className="w-20 h-20 mx-auto rounded-full gradient-bg flex items-center justify-center mb-4">
+                          <div className="w-20 h-20 mx-auto rounded-full gradient-bg flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(255,69,0,0.5)]">
                             <Play size={32} className="ml-1" />
                           </div>
                           <p className="text-white/60">Video uskoro dostupan</p>
@@ -115,11 +168,15 @@ export default function CourseDetailPage() {
                       </div>
                       <h3 className="text-xl font-semibold mb-2">Kurs Zaključan</h3>
                       <p className="text-white/60 mb-6">
-                        Potrebna je aktivna pretplata za pristup ovom kursu
+                        Kupite ovaj kurs da dobijete pristup
                       </p>
-                      <Link to="/pricing" className="btn-gradient">
-                        Kupi Pretplatu
-                      </Link>
+                      <Button 
+                        onClick={handlePurchase}
+                        disabled={purchasing}
+                        className="btn-gradient shadow-[0_0_20px_rgba(255,69,0,0.4)]"
+                      >
+                        {purchasing ? 'Učitavanje...' : `Kupi za €${course.price}/mj`}
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -134,9 +191,14 @@ export default function CourseDetailPage() {
                     Besplatno
                   </span>
                 )}
+                {isPurchased && (
+                  <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 text-sm font-medium">
+                    Kupljeno
+                  </span>
+                )}
                 <span className="text-white/40 flex items-center gap-1">
                   <BookOpen size={16} />
-                  Kurs
+                  Mjesečni Kurs
                 </span>
               </div>
 
@@ -160,18 +222,19 @@ export default function CourseDetailPage() {
           >
             <div className="glass-card rounded-2xl p-6 sticky top-28">
               <div className="mb-6">
-                <span className="text-4xl font-bold gradient-text">
+                <span className="text-4xl font-bold gradient-text drop-shadow-[0_0_15px_rgba(255,69,0,0.4)]">
                   {course.is_free ? 'Besplatno' : `€${course.price}`}
                 </span>
+                {!course.is_free && <span className="text-white/50 ml-1">/mjesečno</span>}
               </div>
 
               {canAccess ? (
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 text-green-400">
                     <CheckCircle size={20} />
-                    <span>Imaš pristup ovom kursu</span>
+                    <span>{isPurchased ? 'Kurs kupljen!' : 'Imate pristup'}</span>
                   </div>
-                  <Button className="w-full btn-gradient h-14 text-lg" data-testid="watch-course-btn">
+                  <Button className="w-full btn-gradient h-14 text-lg shadow-[0_0_20px_rgba(255,69,0,0.3)]" data-testid="watch-course-btn">
                     <Play size={20} className="mr-2" />
                     Gledaj Kurs
                   </Button>
@@ -192,11 +255,24 @@ export default function CourseDetailPage() {
                       </Link>
                     </>
                   ) : (
-                    <Link to="/pricing" className="block">
-                      <Button className="w-full btn-gradient h-14 text-lg" data-testid="buy-subscription-btn">
-                        Kupi Pretplatu
-                      </Button>
-                    </Link>
+                    <Button 
+                      onClick={handlePurchase}
+                      disabled={purchasing}
+                      className="w-full btn-gradient h-14 text-lg shadow-[0_0_20px_rgba(255,69,0,0.4)]" 
+                      data-testid="buy-course-btn"
+                    >
+                      {purchasing ? (
+                        <span className="flex items-center gap-2">
+                          <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                          Učitavanje...
+                        </span>
+                      ) : (
+                        <>
+                          <ShoppingCart size={20} className="mr-2" />
+                          Kupi Kurs - €{course.price}/mj
+                        </>
+                      )}
+                    </Button>
                   )}
                 </div>
               )}
@@ -209,6 +285,7 @@ export default function CourseDetailPage() {
                     'Praktični primjeri',
                     'Discord zajednica',
                     'Podrška 24/7',
+                    'Mjesečna ažuriranja'
                   ].map((item, index) => (
                     <li key={index} className="flex items-center gap-3 text-white/70">
                       <CheckCircle size={16} className="text-[#FF4500]" />
