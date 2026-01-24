@@ -129,6 +129,29 @@ class SiteSettings(BaseModel):
     nav_links: List[Dict[str, str]] = []
     pricing_plans: List[Dict[str, Any]] = []
 
+class ShopProductCreate(BaseModel):
+    title: str
+    description: str
+    thumbnail: str
+    platform: str  # youtube, tiktok, facebook
+    price: float
+    features: List[str] = []
+    in_stock: bool = True
+    order: int = 0
+
+class ShopProductResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    title: str
+    description: str
+    thumbnail: str
+    platform: str
+    price: float
+    features: List[str]
+    in_stock: bool
+    order: int
+    created_at: str
+
 class PaymentCreate(BaseModel):
     plan_id: str
     origin_url: str
