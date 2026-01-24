@@ -116,6 +116,7 @@ class ResultResponse(BaseModel):
 class SiteSettings(BaseModel):
     hero_title: str = "Zaradi Sa Nama"
     hero_subtitle: str = "Nauči vještine koje će promijeniti tvoj život"
+    hero_image: str = "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=1920"
     intro_video_mux_id: str = ""
     why_us_title: str = "Zašto Continental Academy?"
     why_us_points: List[str] = []
