@@ -851,6 +851,20 @@ export default function AdminPage() {
                       onChange={(e) => setSettings({ ...settings, hero_subtitle: e.target.value })}
                       className="bg-white/5 border-white/10"
                     />
+                    <div>
+                      <label className="block text-sm text-white/70 mb-2">Hero Slika (Pozadinska)</label>
+                      <Input
+                        placeholder="URL slike za header pozadinu"
+                        value={settings.hero_image || ''}
+                        onChange={(e) => setSettings({ ...settings, hero_image: e.target.value })}
+                        className="bg-white/5 border-white/10"
+                      />
+                      {settings.hero_image && (
+                        <div className="mt-2 rounded-lg overflow-hidden h-32">
+                          <img src={settings.hero_image} alt="Hero preview" className="w-full h-full object-cover opacity-50" />
+                        </div>
+                      )}
+                    </div>
                     <Input
                       placeholder="Intro Video Mux ID"
                       value={settings.intro_video_mux_id}
