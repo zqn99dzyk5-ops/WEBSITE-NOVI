@@ -40,6 +40,7 @@ export default function HomePage() {
   const [faqs, setFaqs] = useState([]);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [videoPlaying, setVideoPlaying] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -78,8 +79,8 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
-        <div className="w-16 h-16 rounded-full border-4 border-white/10 border-t-[#FF4500] animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-[#050505]">
+        <div className="w-16 h-16 rounded-full border-4 border-white/10 border-t-[#FF4500] animate-spin shadow-[0_0_30px_rgba(255,69,0,0.5)]" />
       </div>
     );
   }
@@ -99,38 +100,46 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]" data-testid="home-page">
-      {/* Hero Section - starts below header */}
-      <section className="relative min-h-screen flex items-center pt-20" data-testid="hero-section">
-        {/* Background Image - starts below header */}
-        {settings?.hero_image && (
-          <div className="absolute top-20 left-0 right-0 bottom-0">
+    <div className="min-h-screen bg-[#050505]" data-testid="home-page">
+      {/* Global Glow Effects */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute top-0 left-0 w-[800px] h-[800px] bg-[#FF4500]/20 rounded-full blur-[200px] animate-pulse" />
+        <div className="absolute top-1/4 right-0 w-[600px] h-[600px] bg-[#FF1493]/20 rounded-full blur-[180px] animate-pulse" style={{ animationDelay: '1s' }} />
+        <div className="absolute bottom-0 left-1/3 w-[700px] h-[500px] bg-[#FF6B35]/15 rounded-full blur-[200px] animate-pulse" style={{ animationDelay: '2s' }} />
+        <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-[#FF1493]/15 rounded-full blur-[150px]" />
+      </div>
+
+      {/* ==================== HERO IMAGE SECTION - JUST THE IMAGE ==================== */}
+      <section className="pt-20 relative" data-testid="hero-image-section">
+        <div className="w-full h-[50vh] md:h-[60vh] lg:h-[70vh] relative overflow-hidden">
+          {settings?.hero_image ? (
             <img 
               src={settings.hero_image} 
-              alt="Hero Background"
-              className="w-full h-full object-cover opacity-30"
+              alt="Hero"
+              className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a0a]/80 via-[#0a0a0a]/60 to-[#0a0a0a]" />
-          </div>
-        )}
-
-        {/* Glow Effects */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-32 left-10 w-[500px] h-[500px] bg-[#FF4500]/30 rounded-full blur-[180px] animate-pulse" />
-          <div className="absolute top-52 right-20 w-[400px] h-[400px] bg-[#FF1493]/25 rounded-full blur-[150px] animate-pulse" style={{ animationDelay: '1s' }} />
-          <div className="absolute bottom-20 left-1/3 w-[600px] h-[300px] bg-[#FF6B35]/20 rounded-full blur-[200px]" />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-[#FF4500]/30 to-[#FF1493]/30" />
+          )}
+          {/* Gradient overlay at bottom */}
+          <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#050505] to-transparent" />
+          {/* Glow overlay */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#FF4500]/10 via-transparent to-[#050505]" />
         </div>
+      </section>
 
-        <div className="container-custom relative z-10 pt-16">
+      {/* ==================== TEXT & BUTTONS SECTION - BELOW IMAGE ==================== */}
+      <section className="relative z-10 -mt-16" data-testid="hero-content-section">
+        <div className="container-custom">
           <div className="max-w-4xl mx-auto text-center">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
-              <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-card text-sm mb-8 border border-[#FF4500]/30">
+              <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#FF4500]/20 border border-[#FF4500]/40 text-sm mb-8 shadow-[0_0_30px_rgba(255,69,0,0.3)]">
                 <Sparkles size={16} className="text-[#FF4500]" />
-                <span className="text-white/70">Nova platforma za učenje</span>
+                <span className="text-white/90">Nova platforma za učenje</span>
               </span>
             </motion.div>
 
@@ -141,14 +150,14 @@ export default function HomePage() {
               className="text-4xl sm:text-5xl lg:text-7xl font-bold leading-tight mb-6"
               data-testid="hero-title"
             >
-              <span className="gradient-text drop-shadow-[0_0_30px_rgba(255,69,0,0.5)]">{settings?.hero_title || 'Zaradi Sa Nama'}</span>
+              <span className="gradient-text drop-shadow-[0_0_40px_rgba(255,69,0,0.6)]">{settings?.hero_title || 'Zaradi Sa Nama'}</span>
             </motion.h1>
 
             <motion.p
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="text-lg sm:text-xl text-white/60 max-w-2xl mx-auto mb-10"
+              className="text-lg sm:text-xl text-white/70 max-w-2xl mx-auto mb-10"
             >
               {settings?.hero_subtitle || 'Nauči vještine koje će promijeniti tvoj život i finansijsku budućnost'}
             </motion.p>
@@ -159,52 +168,75 @@ export default function HomePage() {
               transition={{ duration: 0.6, delay: 0.3 }}
               className="flex flex-col sm:flex-row items-center justify-center gap-4"
             >
-              <Link to="/courses" className="btn-gradient text-base px-8 py-4 flex items-center gap-2 shadow-[0_0_30px_rgba(255,69,0,0.4)]" data-testid="hero-cta">
-                Započni Odmah
-                <ArrowRight size={20} />
+              <Link 
+                to="/courses" 
+                className="group relative px-10 py-4 rounded-full font-semibold text-white overflow-hidden transition-all duration-300 hover:scale-105"
+                data-testid="hero-cta"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-[#FF4500] to-[#FF1493] rounded-full" />
+                <div className="absolute inset-0 bg-gradient-to-r from-[#FF4500] to-[#FF1493] rounded-full blur-xl opacity-60 group-hover:opacity-100 transition-opacity" />
+                <span className="relative flex items-center gap-2">
+                  Započni Odmah
+                  <ArrowRight size={20} />
+                </span>
               </Link>
-              <Link to="/shop" className="btn-outline text-base px-8 py-4 border-[#FF4500]/50 hover:border-[#FF4500] hover:shadow-[0_0_20px_rgba(255,69,0,0.3)]">
+              <Link 
+                to="/shop" 
+                className="group relative px-10 py-4 rounded-full font-semibold text-white border-2 border-[#FF4500]/50 hover:border-[#FF4500] transition-all duration-300 hover:shadow-[0_0_30px_rgba(255,69,0,0.4)]"
+              >
                 Kupi Account
               </Link>
             </motion.div>
           </div>
+        </div>
+      </section>
 
-          {/* Video Box */}
-          {settings?.intro_video_mux_id && (
+      {/* ==================== INTRO VIDEO SECTION ==================== */}
+      {settings?.intro_video_mux_id && (
+        <section className="py-20 relative z-10" data-testid="intro-video-section">
+          <div className="container-custom">
             <motion.div
               initial={{ opacity: 0, y: 50 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.5 }}
-              className="mt-20 max-w-4xl mx-auto"
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="max-w-4xl mx-auto"
             >
-              <div className="video-glow rounded-2xl overflow-hidden glass-card p-1">
-                <div className="aspect-video bg-black/50 rounded-xl flex items-center justify-center">
-                  <button className="w-20 h-20 rounded-full gradient-bg flex items-center justify-center glow-hover transition-all shadow-[0_0_40px_rgba(255,69,0,0.5)]">
-                    <Play size={32} className="ml-1" />
-                  </button>
+              <h2 className="text-2xl sm:text-3xl font-bold text-center mb-8">
+                Pogledaj <span className="gradient-text">Intro Video</span>
+              </h2>
+              <div className="relative rounded-2xl overflow-hidden border border-[#FF4500]/30 shadow-[0_0_60px_rgba(255,69,0,0.3)]">
+                <div className="aspect-video bg-black">
+                  {videoPlaying ? (
+                    <iframe
+                      src={`https://stream.mux.com/${settings.intro_video_mux_id}.m3u8`}
+                      className="w-full h-full"
+                      allowFullScreen
+                    />
+                  ) : (
+                    <div className="relative w-full h-full">
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#FF4500]/20 to-[#FF1493]/20" />
+                      <button 
+                        onClick={() => setVideoPlaying(true)}
+                        className="absolute inset-0 flex items-center justify-center group"
+                      >
+                        <div className="w-24 h-24 rounded-full bg-gradient-to-r from-[#FF4500] to-[#FF1493] flex items-center justify-center shadow-[0_0_50px_rgba(255,69,0,0.6)] group-hover:scale-110 transition-transform">
+                          <Play size={40} className="ml-2 text-white" />
+                        </div>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>
-          )}
-        </div>
+          </div>
+        </section>
+      )}
 
-        {/* Scroll Indicator */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1 }}
-          className="absolute bottom-10 left-1/2 -translate-x-1/2"
-        >
-          <ChevronDown size={32} className="text-[#FF4500]/50 animate-bounce" />
-        </motion.div>
-      </section>
-
-      {/* Why Us Section */}
-      <section className="py-24 md:py-32 relative" data-testid="why-us-section">
-        {/* Glow */}
-        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-[#FF1493]/15 rounded-full blur-[150px]" />
+      {/* ==================== WHY US SECTION ==================== */}
+      <section className="py-24 md:py-32 relative z-10" data-testid="why-us-section">
+        <div className="absolute top-1/2 right-0 w-[500px] h-[500px] bg-[#FF1493]/20 rounded-full blur-[180px]" />
         
-        <div className="container-custom relative z-10">
+        <div className="container-custom relative">
           <motion.div
             initial="hidden"
             whileInView="visible"
@@ -236,25 +268,27 @@ export default function HomePage() {
               <motion.div
                 key={index}
                 variants={itemVariants}
-                className="glass-card rounded-2xl p-8 text-center group hover:shadow-[0_0_40px_rgba(255,69,0,0.2)] transition-all duration-300"
+                className="relative group"
               >
-                <div className="w-16 h-16 mx-auto mb-6 rounded-2xl gradient-bg flex items-center justify-center group-hover:scale-110 transition-transform shadow-[0_0_30px_rgba(255,69,0,0.4)]">
-                  <item.icon size={28} />
+                <div className="absolute inset-0 bg-gradient-to-br from-[#FF4500]/20 to-[#FF1493]/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative glass-card rounded-2xl p-8 text-center border border-white/10 hover:border-[#FF4500]/50 transition-all duration-300">
+                  <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-[#FF4500] to-[#FF1493] flex items-center justify-center shadow-[0_0_30px_rgba(255,69,0,0.5)] group-hover:shadow-[0_0_50px_rgba(255,69,0,0.7)] transition-shadow">
+                    <item.icon size={28} />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-3">{item.title}</h3>
+                  <p className="text-white/50">{item.desc}</p>
                 </div>
-                <h3 className="text-xl font-semibold mb-3">{item.title}</h3>
-                <p className="text-white/50">{item.desc}</p>
               </motion.div>
             ))}
           </motion.div>
         </div>
       </section>
 
-      {/* Courses Section */}
-      <section className="py-24 md:py-32 relative" data-testid="courses-section">
-        {/* Glow */}
-        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-[#FF4500]/15 rounded-full blur-[180px]" />
+      {/* ==================== COURSES SECTION ==================== */}
+      <section className="py-24 md:py-32 relative z-10" data-testid="courses-section">
+        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-[#FF4500]/20 rounded-full blur-[200px]" />
         
-        <div className="container-custom relative z-10">
+        <div className="container-custom relative">
           <motion.div
             initial="hidden"
             whileInView="visible"
@@ -271,7 +305,10 @@ export default function HomePage() {
               </motion.p>
             </div>
             <motion.div variants={itemVariants}>
-              <Link to="/courses" className="btn-outline flex items-center gap-2 border-[#FF4500]/50 hover:border-[#FF4500]">
+              <Link 
+                to="/courses" 
+                className="group relative px-8 py-3 rounded-full font-semibold text-white border-2 border-[#FF4500]/50 hover:border-[#FF4500] transition-all flex items-center gap-2 hover:shadow-[0_0_25px_rgba(255,69,0,0.4)]"
+              >
                 Svi Kursevi
                 <ArrowRight size={18} />
               </Link>
@@ -287,34 +324,40 @@ export default function HomePage() {
           >
             {courses.map((course, index) => (
               <motion.div key={course.id} variants={itemVariants}>
-                <Link to={`/courses/${course.id}`} className="block glass-card rounded-2xl overflow-hidden group hover:shadow-[0_0_40px_rgba(255,69,0,0.25)] transition-all duration-300">
-                  <div className="aspect-video relative overflow-hidden">
-                    <img
-                      src={course.thumbnail}
-                      alt={course.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm border border-white/10">
-                      {getPlatformIcon(course.title)}
-                      <span className="text-sm font-medium">Mjesečno</span>
-                    </div>
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <div className="w-16 h-16 rounded-full gradient-bg flex items-center justify-center shadow-[0_0_30px_rgba(255,69,0,0.5)]">
-                        <Play size={24} className="ml-1" />
+                <Link to={`/courses/${course.id}`} className="block group relative">
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#FF4500]/30 to-[#FF1493]/30 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="relative glass-card rounded-2xl overflow-hidden border border-white/10 hover:border-[#FF4500]/50 transition-all duration-300">
+                    <div className="aspect-video relative overflow-hidden">
+                      <img
+                        src={course.thumbnail}
+                        alt={course.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                      <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm border border-[#FF4500]/30">
+                        {getPlatformIcon(course.title)}
+                        <span className="text-sm font-medium">Mjesečno</span>
+                      </div>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-r from-[#FF4500] to-[#FF1493] flex items-center justify-center shadow-[0_0_40px_rgba(255,69,0,0.6)]">
+                          <Play size={24} className="ml-1" />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="p-6">
-                    <h3 className="text-xl font-semibold mb-2 group-hover:text-[#FF4500] transition-colors">
-                      {course.title}
-                    </h3>
-                    <p className="text-white/50 text-sm line-clamp-2 mb-4">
-                      {course.description}
-                    </p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-2xl font-bold gradient-text drop-shadow-[0_0_10px_rgba(255,69,0,0.3)]">
-                        €{course.price}/mj
-                      </span>
+                    <div className="p-6">
+                      <h3 className="text-xl font-semibold mb-2 group-hover:text-[#FF4500] transition-colors">
+                        {course.title}
+                      </h3>
+                      <p className="text-white/50 text-sm line-clamp-2 mb-4">
+                        {course.description}
+                      </p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-2xl font-bold gradient-text drop-shadow-[0_0_15px_rgba(255,69,0,0.4)]">
+                          €{course.price}/mj
+                        </span>
+                        <span className="px-4 py-2 rounded-full bg-gradient-to-r from-[#FF4500] to-[#FF1493] text-sm font-medium shadow-[0_0_20px_rgba(255,69,0,0.4)]">
+                          Kupi
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </Link>
@@ -324,39 +367,11 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Shop CTA Section */}
-      <section className="py-20 relative overflow-hidden" data-testid="shop-cta-section">
-        <div className="absolute inset-0 gradient-bg opacity-10" />
-        <div className="absolute inset-0">
-          <div className="absolute top-1/2 left-1/4 w-[300px] h-[300px] bg-[#FF4500]/30 rounded-full blur-[100px]" />
-          <div className="absolute top-1/2 right-1/4 w-[300px] h-[300px] bg-[#FF1493]/30 rounded-full blur-[100px]" />
-        </div>
+      {/* ==================== FAQ SECTION ==================== */}
+      <section className="py-24 md:py-32 relative z-10" data-testid="faq-section">
+        <div className="absolute top-1/2 right-0 w-[500px] h-[500px] bg-[#FF1493]/15 rounded-full blur-[180px]" />
         
-        <div className="container-custom relative z-10">
-          <div className="glass-card rounded-3xl p-8 md:p-12 border border-[#FF4500]/30">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-              <div>
-                <h2 className="text-2xl sm:text-3xl font-bold mb-4">
-                  Kupi <span className="gradient-text">Monetizovan Account</span>
-                </h2>
-                <p className="text-white/60 max-w-xl">
-                  YouTube, TikTok, Facebook - Potpuno monetizovani accounti spremni za zaradu. Instant transfer vlasništva.
-                </p>
-              </div>
-              <Link to="/shop" className="btn-gradient px-8 py-4 flex items-center gap-2 shadow-[0_0_30px_rgba(255,69,0,0.4)] whitespace-nowrap">
-                Pogledaj Shop
-                <ArrowRight size={20} />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ Section */}
-      <section className="py-24 md:py-32 relative" data-testid="faq-section">
-        <div className="absolute top-1/2 right-0 w-[400px] h-[400px] bg-[#FF1493]/10 rounded-full blur-[150px]" />
-        
-        <div className="container-custom relative z-10">
+        <div className="container-custom relative">
           <motion.div
             initial="hidden"
             whileInView="visible"
@@ -379,7 +394,7 @@ export default function HomePage() {
                   <AccordionItem
                     key={faq.id}
                     value={faq.id}
-                    className="glass-card rounded-xl px-6 border-none hover:shadow-[0_0_20px_rgba(255,69,0,0.15)] transition-shadow"
+                    className="glass-card rounded-xl px-6 border border-white/10 hover:border-[#FF4500]/30 transition-colors"
                   >
                     <AccordionTrigger className="text-left text-lg font-medium py-6 hover:no-underline">
                       {faq.question}
@@ -393,7 +408,7 @@ export default function HomePage() {
             </motion.div>
 
             <motion.div variants={itemVariants} className="text-center mt-10">
-              <Link to="/faq" className="text-[#FF4500] hover:underline">
+              <Link to="/faq" className="text-[#FF4500] hover:text-[#FF6B35] transition-colors">
                 Pogledaj sva pitanja →
               </Link>
             </motion.div>
@@ -401,12 +416,12 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Results Section */}
+      {/* ==================== RESULTS SECTION ==================== */}
       {results.length > 0 && (
-        <section className="py-24 md:py-32 relative" data-testid="results-section">
-          <div className="absolute bottom-0 left-1/4 w-[500px] h-[300px] bg-[#FF4500]/15 rounded-full blur-[150px]" />
+        <section className="py-24 md:py-32 relative z-10" data-testid="results-section">
+          <div className="absolute bottom-0 left-1/4 w-[600px] h-[400px] bg-[#FF4500]/20 rounded-full blur-[180px]" />
           
-          <div className="container-custom relative z-10">
+          <div className="container-custom relative">
             <motion.div
               initial="hidden"
               whileInView="visible"
@@ -433,17 +448,20 @@ export default function HomePage() {
                 <motion.div
                   key={result.id}
                   variants={itemVariants}
-                  className="glass-card rounded-2xl overflow-hidden hover:shadow-[0_0_30px_rgba(255,69,0,0.2)] transition-shadow"
+                  className="group relative"
                 >
-                  <div className="aspect-[4/3] overflow-hidden">
-                    <img
-                      src={result.image}
-                      alt={result.text}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="p-6">
-                    <p className="text-white/80">{result.text}</p>
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#FF4500]/20 to-[#FF1493]/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="relative glass-card rounded-2xl overflow-hidden border border-white/10 hover:border-[#FF4500]/40 transition-all">
+                    <div className="aspect-[4/3] overflow-hidden">
+                      <img
+                        src={result.image}
+                        alt={result.text}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    </div>
+                    <div className="p-6">
+                      <p className="text-white/80">{result.text}</p>
+                    </div>
                   </div>
                 </motion.div>
               ))}
@@ -452,13 +470,13 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* Stats Section */}
-      <section className="py-24 md:py-32 relative" data-testid="stats-section">
+      {/* ==================== STATS SECTION ==================== */}
+      <section className="py-24 md:py-32 relative z-10" data-testid="stats-section">
         <div className="absolute inset-0">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-gradient-to-r from-[#FF4500]/20 to-[#FF1493]/20 rounded-full blur-[150px]" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[500px] bg-gradient-to-r from-[#FF4500]/25 to-[#FF1493]/25 rounded-full blur-[200px]" />
         </div>
         
-        <div className="container-custom relative z-10">
+        <div className="container-custom relative">
           <motion.div
             initial="hidden"
             whileInView="visible"
@@ -475,9 +493,9 @@ export default function HomePage() {
               <motion.div
                 key={index}
                 variants={itemVariants}
-                className="text-center glass-card rounded-2xl p-8 hover:shadow-[0_0_30px_rgba(255,69,0,0.2)] transition-shadow"
+                className="text-center glass-card rounded-2xl p-8 border border-white/10 hover:border-[#FF4500]/40 transition-all hover:shadow-[0_0_40px_rgba(255,69,0,0.2)]"
               >
-                <div className="text-4xl sm:text-5xl lg:text-6xl font-bold gradient-text mb-2 drop-shadow-[0_0_20px_rgba(255,69,0,0.4)]">
+                <div className="text-4xl sm:text-5xl lg:text-6xl font-bold gradient-text mb-2 drop-shadow-[0_0_30px_rgba(255,69,0,0.5)]">
                   {stat.value}{stat.suffix}
                 </div>
                 <div className="text-white/50 text-lg">{stat.label}</div>
@@ -487,13 +505,13 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Discord CTA Section */}
-      <section className="py-24 md:py-32 relative overflow-hidden" data-testid="discord-section">
+      {/* ==================== DISCORD SECTION ==================== */}
+      <section className="py-24 md:py-32 relative z-10 overflow-hidden" data-testid="discord-section">
         <div className="absolute inset-0">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#5865F2]/20 rounded-full blur-[200px]" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-[#5865F2]/30 rounded-full blur-[200px]" />
         </div>
 
-        <div className="container-custom relative z-10">
+        <div className="container-custom relative">
           <motion.div
             initial="hidden"
             whileInView="visible"
@@ -502,8 +520,8 @@ export default function HomePage() {
             className="max-w-3xl mx-auto text-center"
           >
             <motion.div variants={itemVariants} className="mb-8">
-              <div className="w-20 h-20 mx-auto rounded-2xl bg-[#5865F2] flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(88,101,242,0.5)]">
-                <MessageCircle size={40} />
+              <div className="w-24 h-24 mx-auto rounded-2xl bg-[#5865F2] flex items-center justify-center mb-6 shadow-[0_0_60px_rgba(88,101,242,0.6)]">
+                <MessageCircle size={48} />
               </div>
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">
                 Pridruži Se <span className="text-[#5865F2]">Discord</span> Zajednici
@@ -519,7 +537,7 @@ export default function HomePage() {
                 target="_blank"
                 rel="noopener noreferrer"
                 data-testid="discord-cta"
-                className="inline-flex items-center gap-3 px-10 py-5 rounded-full bg-[#5865F2] hover:bg-[#4752C4] transition-colors text-lg font-semibold shadow-[0_0_30px_rgba(88,101,242,0.4)]"
+                className="inline-flex items-center gap-3 px-12 py-5 rounded-full bg-[#5865F2] hover:bg-[#4752C4] transition-all text-lg font-semibold shadow-[0_0_40px_rgba(88,101,242,0.5)] hover:shadow-[0_0_60px_rgba(88,101,242,0.7)]"
               >
                 <MessageCircle size={24} />
                 discord.gg/continentall
@@ -529,23 +547,26 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Support Banner */}
-      <section className="py-16 relative overflow-hidden" data-testid="support-section">
-        <div className="absolute inset-0 gradient-bg" />
-        <div className="absolute inset-0 bg-black/20" />
+      {/* ==================== SUPPORT BANNER ==================== */}
+      <section className="py-16 relative z-10 overflow-hidden" data-testid="support-section">
+        <div className="absolute inset-0 bg-gradient-to-r from-[#FF4500] to-[#FF1493]" />
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"none\" fill-rule=\"evenodd\"%3E%3Cg fill=\"%23ffffff\" fill-opacity=\"0.05\"%3E%3Cpath d=\"M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-20" />
         
-        <div className="container-custom relative z-10">
+        <div className="container-custom relative">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-                <Shield size={24} />
+              <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.2)]">
+                <Shield size={28} />
               </div>
               <div>
                 <h3 className="text-xl font-semibold">{settings?.support_text || 'Support nam je 24/7'}</h3>
-                <p className="text-white/70">Uvijek smo tu da ti pomognemo</p>
+                <p className="text-white/80">Uvijek smo tu da ti pomognemo</p>
               </div>
             </div>
-            <Link to="/contact" className="btn-outline bg-white/10 border-white/30 hover:bg-white/20">
+            <Link 
+              to="/contact" 
+              className="px-8 py-3 rounded-full bg-white/20 border border-white/40 hover:bg-white/30 transition-all font-semibold shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+            >
               Kontaktiraj Nas
             </Link>
           </div>
