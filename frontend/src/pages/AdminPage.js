@@ -17,7 +17,10 @@ import {
   HelpCircle,
   Image,
   Crown,
-  Ban
+  Ban,
+  ShoppingBag,
+  Youtube,
+  Facebook
 } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
@@ -38,15 +41,19 @@ export default function AdminPage() {
   const [results, setResults] = useState([]);
   const [messages, setMessages] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [shopProducts, setShopProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Form states
   const [editingCourse, setEditingCourse] = useState(null);
   const [editingFaq, setEditingFaq] = useState(null);
   const [editingResult, setEditingResult] = useState(null);
+  const [editingShopProduct, setEditingShopProduct] = useState(null);
   const [newCourse, setNewCourse] = useState({ title: '', description: '', thumbnail: '', mux_video_id: '', price: 0, is_free: false, order: 0 });
   const [newFaq, setNewFaq] = useState({ question: '', answer: '', order: 0 });
   const [newResult, setNewResult] = useState({ image: '', text: '', order: 0 });
+  const [newShopProduct, setNewShopProduct] = useState({ title: '', description: '', thumbnail: '', platform: 'youtube', price: 0, features: [], in_stock: true, order: 0 });
+  const [newFeature, setNewFeature] = useState('');
 
   const headers = { Authorization: `Bearer ${token}` };
 
