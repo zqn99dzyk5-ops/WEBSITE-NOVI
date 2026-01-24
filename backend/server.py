@@ -643,24 +643,24 @@ async def seed_initial_data():
     # Check if data exists
     courses_count = await db.courses.count_documents({})
     if courses_count == 0:
-        # Seed courses
+        # Seed courses - TikTok, YouTube, Facebook
         courses = [
             {
                 "id": str(uuid.uuid4()),
-                "title": "Osnove Online Zarade",
-                "description": "Naučite kako započeti zaradu na internetu od nule.",
-                "thumbnail": "https://images.unsplash.com/photo-1643962579745-bcaa05ffc573?w=800",
+                "title": "TikTok Monetizacija",
+                "description": "Naučite kako monetizovati TikTok profil i zarađivati od kratkih videa. Kompletan vodič od 0 do prvog novca.",
+                "thumbnail": "https://images.unsplash.com/photo-1611162618071-b39a2ec055fb?w=800",
                 "mux_video_id": "placeholder",
-                "price": 0.0,
-                "is_free": True,
+                "price": 29.99,
+                "is_free": False,
                 "order": 1,
                 "created_at": datetime.now(timezone.utc).isoformat()
             },
             {
                 "id": str(uuid.uuid4()),
-                "title": "Napredni Marketing",
-                "description": "Savladajte digitalni marketing i povećajte svoju zaradu.",
-                "thumbnail": "https://images.unsplash.com/photo-1648098893250-1d03dce92467?w=800",
+                "title": "YouTube Masterclass",
+                "description": "Kompletna strategija za uspjeh na YouTube-u. Od kreiranja kanala do monetizacije i sponzorstva.",
+                "thumbnail": "https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?w=800",
                 "mux_video_id": "placeholder",
                 "price": 29.99,
                 "is_free": False,
@@ -669,17 +669,60 @@ async def seed_initial_data():
             },
             {
                 "id": str(uuid.uuid4()),
-                "title": "Freelancing Masterclass",
-                "description": "Postanite uspješan freelancer i radite od kuće.",
-                "thumbnail": "https://images.unsplash.com/photo-1643962579365-3a9222e923b8?w=800",
+                "title": "Facebook & Instagram Ads",
+                "description": "Ovladajte Facebook i Instagram oglašavanjem. Naučite kako targetirati publiku i maksimizirati ROI.",
+                "thumbnail": "https://images.unsplash.com/photo-1611162616475-46b635cb6868?w=800",
                 "mux_video_id": "placeholder",
-                "price": 49.99,
+                "price": 29.99,
                 "is_free": False,
                 "order": 3,
                 "created_at": datetime.now(timezone.utc).isoformat()
             }
         ]
         await db.courses.insert_many(courses)
+    
+    # Seed Shop Products
+    shop_count = await db.shop_products.count_documents({})
+    if shop_count == 0:
+        shop_products = [
+            {
+                "id": str(uuid.uuid4()),
+                "title": "YouTube Monetizovan Kanal",
+                "description": "Potpuno monetizovan YouTube kanal spreman za zaradu. 1000+ subscribera, 4000+ sati watch time.",
+                "thumbnail": "https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?w=800",
+                "platform": "youtube",
+                "price": 299.99,
+                "features": ["1000+ Subscribera", "4000+ Watch Hours", "Monetizacija Aktivna", "Čist Copyright", "Transfer Vlasništva"],
+                "in_stock": True,
+                "order": 1,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "title": "TikTok Monetizovan Account",
+                "description": "TikTok account sa aktiviranom monetizacijom. Spreman za Creator Fund i LIVE poklone.",
+                "thumbnail": "https://images.unsplash.com/photo-1611162618071-b39a2ec055fb?w=800",
+                "platform": "tiktok",
+                "price": 199.99,
+                "features": ["10K+ Followera", "Creator Fund Aktivan", "LIVE Gifts Enabled", "Čist Account", "Instant Transfer"],
+                "in_stock": True,
+                "order": 2,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Facebook Monetizovan Page",
+                "description": "Facebook stranica sa aktivnom monetizacijom. In-Stream Ads i Reels bonus program.",
+                "thumbnail": "https://images.unsplash.com/photo-1611162616475-46b635cb6868?w=800",
+                "platform": "facebook",
+                "price": 249.99,
+                "features": ["10K+ Followera", "In-Stream Ads Aktivan", "Reels Bonus", "Professional Mode", "Brand Collabs"],
+                "in_stock": True,
+                "order": 3,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+        ]
+        await db.shop_products.insert_many(shop_products)
     
     # Seed FAQs
     faqs_count = await db.faqs.count_documents({})
