@@ -12,7 +12,7 @@ import {
   Lock,
   User,
   Mail,
-  Calendar
+  ShoppingBag
 } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -21,7 +21,8 @@ const API = `${BACKEND_URL}/api`;
 export default function DashboardPage() {
   const { user, token } = useAuth();
   const navigate = useNavigate();
-  const [courses, setCourses] = useState([]);
+  const [allCourses, setAllCourses] = useState([]);
+  const [purchasedCourses, setPurchasedCourses] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,19 +31,21 @@ export default function DashboardPage() {
       return;
     }
 
-    const fetchCourses = async () => {
+    const fetchData = async () => {
       try {
-        const response = await axios.get(`${API}/courses`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setCourses(response.data);
+        const [allCoursesRes, purchasedRes] = await Promise.all([
+          axios.get(`${API}/courses`),
+          axios.get(`${API}/user/courses`, { headers: { Authorization: `Bearer ${token}` } })
+        ]);
+        setAllCourses(allCoursesRes.data);
+        setPurchasedCourses(purchasedRes.data);
       } catch (error) {
-        console.error('Error fetching courses:', error);
+        console.error('Error fetching data:', error);
       } finally {
         setLoading(false);
       }
     };
-    fetchCourses();
+    fetchData();
   }, [user, token, navigate]);
 
   if (!user) return null;
@@ -61,10 +64,22 @@ export default function DashboardPage() {
   };
 
   const isActive = user.subscription_status === 'active';
+  const purchasedIds = purchasedCourses.map(c => c.id);
+
+  // User can access course if: they purchased it, it's free, or they have active subscription
+  const canAccessCourse = (course) => {
+    return purchasedIds.includes(course.id) || course.is_free || isActive;
+  };
 
   return (
-    <div className="min-h-screen bg-black pt-24 pb-16" data-testid="dashboard-page">
-      <div className="container-custom">
+    <div className="min-h-screen bg-[#0a0a0a] pt-28 pb-16" data-testid="dashboard-page">
+      {/* Background Glow */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-40 right-20 w-[400px] h-[400px] bg-[#FF4500]/15 rounded-full blur-[150px]" />
+        <div className="absolute bottom-40 left-20 w-[400px] h-[400px] bg-[#FF1493]/15 rounded-full blur-[150px]" />
+      </div>
+
+      <div className="container-custom relative z-10">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -74,75 +89,102 @@ export default function DashboardPage() {
           <h1 className="text-3xl sm:text-4xl font-bold mb-2">
             Dobrodošli, <span className="gradient-text">{user.name}</span>
           </h1>
-          <p className="text-white/50">Upravljajte svojim učenjem i pretplatom</p>
+          <p className="text-white/50">Vaši kursevi i pretplata</p>
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-8">
-            {/* Subscription Status */}
+            {/* Purchased Courses Section */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className={`glass-card rounded-2xl p-6 ${isActive ? 'border-green-500/30' : 'border-yellow-500/30'}`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-4">
-                  <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${
-                    isActive ? 'bg-green-500/20' : 'bg-yellow-500/20'
-                  }`}>
-                    {isActive ? (
-                      <Crown size={28} className="text-green-400" />
-                    ) : (
-                      <Lock size={28} className="text-yellow-400" />
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold mb-1">
-                      {isActive ? 'Aktivna Pretplata' : 'Bez Aktivne Pretplate'}
-                    </h3>
-                    <p className="text-white/50 text-sm">
-                      {isActive 
-                        ? 'Imate pristup svim premium kursevima' 
-                        : 'Kupite pretplatu za pristup svim kursevima'}
-                    </p>
-                  </div>
-                </div>
-                {!isActive && (
-                  <Link to="/pricing" className="btn-gradient text-sm px-6 py-2.5">
-                    Kupi Pretplatu
-                  </Link>
-                )}
-              </div>
-            </motion.div>
-
-            {/* Courses */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
             >
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold">Moji Kursevi</h2>
-                <Link to="/courses" className="text-[#FF4500] hover:underline text-sm">
-                  Svi kursevi →
-                </Link>
+                <h2 className="text-2xl font-bold flex items-center gap-3">
+                  <ShoppingBag className="text-[#FF4500]" />
+                  Moji Kupljeni Kursevi
+                </h2>
               </div>
 
               {loading ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="w-10 h-10 rounded-full border-4 border-white/10 border-t-[#FF4500] animate-spin" />
                 </div>
-              ) : (
+              ) : purchasedCourses.length > 0 ? (
                 <motion.div
                   initial="hidden"
                   animate="visible"
                   variants={containerVariants}
                   className="grid grid-cols-1 sm:grid-cols-2 gap-6"
                 >
-                  {courses.slice(0, 4).map((course) => {
-                    const canAccess = course.is_free || isActive;
+                  {purchasedCourses.map((course) => (
+                    <motion.div key={course.id} variants={itemVariants}>
+                      <Link
+                        to={`/courses/${course.id}`}
+                        className="block glass-card rounded-xl overflow-hidden group hover:shadow-[0_0_30px_rgba(255,69,0,0.2)]"
+                      >
+                        <div className="aspect-video relative overflow-hidden">
+                          <img
+                            src={course.thumbnail}
+                            alt={course.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <div className="w-12 h-12 rounded-full gradient-bg flex items-center justify-center shadow-[0_0_20px_rgba(255,69,0,0.5)]">
+                              <Play size={20} className="ml-0.5" />
+                            </div>
+                          </div>
+                          <span className="absolute top-2 right-2 px-2 py-1 rounded bg-green-500/80 text-xs font-medium">
+                            Kupljeno
+                          </span>
+                        </div>
+                        <div className="p-4">
+                          <h4 className="font-semibold text-sm line-clamp-1 group-hover:text-[#FF4500] transition-colors">
+                            {course.title}
+                          </h4>
+                          <p className="text-xs text-green-400 mt-1">Pristup aktivan</p>
+                        </div>
+                      </Link>
+                    </motion.div>
+                  ))}
+                </motion.div>
+              ) : (
+                <div className="glass-card rounded-xl p-8 text-center">
+                  <ShoppingBag size={48} className="mx-auto mb-4 text-white/20" />
+                  <p className="text-white/50 mb-4">Nemate kupljenih kurseva</p>
+                  <Link to="/courses" className="btn-gradient inline-flex px-6 py-2">
+                    Pregledaj Kurseve
+                  </Link>
+                </div>
+              )}
+            </motion.div>
+
+            {/* All Available Courses */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold">Svi Kursevi</h2>
+                <Link to="/courses" className="text-[#FF4500] hover:underline text-sm">
+                  Pogledaj sve →
+                </Link>
+              </div>
+
+              {!loading && (
+                <motion.div
+                  initial="hidden"
+                  animate="visible"
+                  variants={containerVariants}
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-6"
+                >
+                  {allCourses.slice(0, 4).map((course) => {
+                    const hasAccess = canAccessCourse(course);
+                    const isPurchased = purchasedIds.includes(course.id);
+                    
                     return (
                       <motion.div key={course.id} variants={itemVariants}>
                         <Link
@@ -153,19 +195,29 @@ export default function DashboardPage() {
                             <img
                               src={course.thumbnail}
                               alt={course.title}
-                              className={`w-full h-full object-cover ${!canAccess && 'blur-sm'}`}
+                              className={`w-full h-full object-cover ${!hasAccess && 'blur-[2px]'}`}
                             />
-                            {!canAccess && (
+                            {!hasAccess && (
                               <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                                 <Lock size={24} className="text-white/60" />
                               </div>
                             )}
-                            {canAccess && (
+                            {hasAccess && (
                               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                 <div className="w-12 h-12 rounded-full gradient-bg flex items-center justify-center">
                                   <Play size={20} className="ml-0.5" />
                                 </div>
                               </div>
+                            )}
+                            {isPurchased && (
+                              <span className="absolute top-2 right-2 px-2 py-1 rounded bg-green-500/80 text-xs">
+                                Kupljeno
+                              </span>
+                            )}
+                            {course.is_free && !isPurchased && (
+                              <span className="absolute top-2 right-2 px-2 py-1 rounded bg-blue-500/80 text-xs">
+                                Besplatno
+                              </span>
                             )}
                           </div>
                           <div className="p-4">
@@ -173,14 +225,9 @@ export default function DashboardPage() {
                               {course.title}
                             </h4>
                             <div className="flex items-center justify-between mt-2">
-                              <span className={`text-xs ${canAccess ? 'text-green-400' : 'text-yellow-400'}`}>
-                                {canAccess ? 'Dostupno' : 'Zaključano'}
+                              <span className={`text-xs ${hasAccess ? 'text-green-400' : 'text-yellow-400'}`}>
+                                {hasAccess ? 'Dostupno' : `€${course.price}/mj`}
                               </span>
-                              {course.is_free && (
-                                <span className="text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded">
-                                  Besplatno
-                                </span>
-                              )}
                             </div>
                           </div>
                         </Link>
@@ -228,7 +275,7 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-xs text-white/40">Status</p>
                     <p className={`text-sm ${isActive ? 'text-green-400' : 'text-yellow-400'}`}>
-                      {isActive ? 'Premium' : 'Besplatni'}
+                      {isActive ? 'Premium Član' : 'Pojedinačni Kursevi'}
                     </p>
                   </div>
                 </div>
@@ -240,16 +287,14 @@ export default function DashboardPage() {
               <h3 className="font-semibold mb-6">Statistike</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center p-4 rounded-xl bg-white/5">
-                  <BookOpen size={24} className="mx-auto mb-2 text-[#FF4500]" />
-                  <p className="text-2xl font-bold">{courses.length}</p>
-                  <p className="text-xs text-white/40">Kurseva</p>
+                  <ShoppingBag size={24} className="mx-auto mb-2 text-[#FF4500]" />
+                  <p className="text-2xl font-bold">{purchasedCourses.length}</p>
+                  <p className="text-xs text-white/40">Kupljeno</p>
                 </div>
                 <div className="text-center p-4 rounded-xl bg-white/5">
-                  <CheckCircle size={24} className="mx-auto mb-2 text-green-400" />
-                  <p className="text-2xl font-bold">
-                    {courses.filter(c => c.is_free || isActive).length}
-                  </p>
-                  <p className="text-xs text-white/40">Dostupno</p>
+                  <BookOpen size={24} className="mx-auto mb-2 text-green-400" />
+                  <p className="text-2xl font-bold">{allCourses.length}</p>
+                  <p className="text-xs text-white/40">Ukupno</p>
                 </div>
               </div>
             </div>
