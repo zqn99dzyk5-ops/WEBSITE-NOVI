@@ -733,34 +733,34 @@ export default function AdminPage() {
 
           {/* FAQ Tab */}
           <TabsContent value="faq" className="space-y-6">
-            <div className="glass-card rounded-xl p-6">
+            <div className="glass-card rounded-xl p-4 sm:p-6">
               <h3 className="font-semibold mb-4">Novo Pitanje</h3>
-              <div className="grid gap-4">
+              <div className="space-y-3">
                 <Input placeholder="Pitanje" value={newFaq.question} onChange={(e) => setNewFaq({ ...newFaq, question: e.target.value })} className="bg-white/5 border-white/10" />
                 <Input placeholder="Odgovor" value={newFaq.answer} onChange={(e) => setNewFaq({ ...newFaq, answer: e.target.value })} className="bg-white/5 border-white/10" />
-                <Button onClick={handleCreateFaq} className="btn-gradient w-fit"><Plus size={18} className="mr-2" />Dodaj FAQ</Button>
+                <Button onClick={handleCreateFaq} className="btn-gradient"><Plus size={18} className="mr-2" />Dodaj FAQ</Button>
               </div>
             </div>
             <div className="space-y-4">
               {faqs.map((faq) => (
                 <div key={faq.id} className="glass-card rounded-xl p-4">
                   {editingFaq === faq.id ? (
-                    <div className="space-y-4">
-                      <Input value={faq.question} onChange={(e) => setFaqs(faqs.map(f => f.id === faq.id ? { ...f, question: e.target.value } : f))} className="bg-white/5 border-white/10" />
-                      <Input value={faq.answer} onChange={(e) => setFaqs(faqs.map(f => f.id === faq.id ? { ...f, answer: e.target.value } : f))} className="bg-white/5 border-white/10" />
-                      <div className="flex gap-2">
+                    <div className="space-y-3">
+                      <Input value={faq.question} onChange={(e) => setFaqs(faqs.map(f => f.id === faq.id ? { ...f, question: e.target.value } : f))} className="bg-white/5 border-white/10" placeholder="Pitanje" />
+                      <Input value={faq.answer} onChange={(e) => setFaqs(faqs.map(f => f.id === faq.id ? { ...f, answer: e.target.value } : f))} className="bg-white/5 border-white/10" placeholder="Odgovor" />
+                      <div className="flex flex-wrap gap-2">
                         <Button onClick={() => handleUpdateFaq(faq.id, faq)} className="btn-gradient"><Save size={16} className="mr-2" />Sačuvaj</Button>
-                        <Button onClick={() => setEditingFaq(null)} variant="outline" className="btn-outline"><X size={16} className="mr-2" />Otkaži</Button>
+                        <Button onClick={() => setEditingFaq(null)} variant="outline" className="border-white/20"><X size={16} className="mr-2" />Otkaži</Button>
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-start gap-4">
+                    <div className="flex items-start gap-3">
                       <HelpCircle size={20} className="text-[#FF4500] mt-1 flex-shrink-0" />
-                      <div className="flex-1">
-                        <h4 className="font-semibold mb-1">{faq.question}</h4>
-                        <p className="text-sm text-white/50">{faq.answer}</p>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold mb-1 break-words">{faq.question}</h4>
+                        <p className="text-sm text-white/50 break-words">{faq.answer}</p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-shrink-0">
                         <button onClick={() => setEditingFaq(faq.id)} className="p-2 rounded-lg bg-white/5 hover:bg-white/10"><Edit2 size={16} /></button>
                         <button onClick={() => handleDeleteFaq(faq.id)} className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400"><Trash2 size={16} /></button>
                       </div>
