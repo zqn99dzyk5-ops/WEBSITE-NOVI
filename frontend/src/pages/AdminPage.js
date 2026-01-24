@@ -773,34 +773,34 @@ export default function AdminPage() {
 
           {/* Results Tab */}
           <TabsContent value="results" className="space-y-6">
-            <div className="glass-card rounded-xl p-6">
+            <div className="glass-card rounded-xl p-4 sm:p-6">
               <h3 className="font-semibold mb-4">Novi Rezultat</h3>
-              <div className="grid gap-4">
+              <div className="space-y-3">
                 <Input placeholder="Slika URL" value={newResult.image} onChange={(e) => setNewResult({ ...newResult, image: e.target.value })} className="bg-white/5 border-white/10" />
                 <Input placeholder="Tekst" value={newResult.text} onChange={(e) => setNewResult({ ...newResult, text: e.target.value })} className="bg-white/5 border-white/10" />
-                <Button onClick={handleCreateResult} className="btn-gradient w-fit"><Plus size={18} className="mr-2" />Dodaj Rezultat</Button>
+                <Button onClick={handleCreateResult} className="btn-gradient"><Plus size={18} className="mr-2" />Dodaj Rezultat</Button>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {results.map((result) => (
                 <div key={result.id} className="glass-card rounded-xl overflow-hidden">
                   <div className="aspect-[4/3]">
                     <img src={result.image} alt={result.text} className="w-full h-full object-cover" />
                   </div>
-                  <div className="p-4">
+                  <div className="p-3">
                     {editingResult === result.id ? (
-                      <div className="space-y-3">
+                      <div className="space-y-2">
                         <Input value={result.image} onChange={(e) => setResults(results.map(r => r.id === result.id ? { ...r, image: e.target.value } : r))} className="bg-white/5 border-white/10 text-sm" placeholder="Slika URL" />
                         <Input value={result.text} onChange={(e) => setResults(results.map(r => r.id === result.id ? { ...r, text: e.target.value } : r))} className="bg-white/5 border-white/10 text-sm" placeholder="Tekst" />
                         <div className="flex gap-2">
-                          <Button size="sm" onClick={() => handleUpdateResult(result.id, result)} className="btn-gradient"><Save size={14} /></Button>
-                          <Button size="sm" onClick={() => setEditingResult(null)} variant="outline" className="btn-outline"><X size={14} /></Button>
+                          <Button size="sm" onClick={() => handleUpdateResult(result.id, result)} className="btn-gradient flex-1"><Save size={14} className="mr-1" />Sačuvaj</Button>
+                          <Button size="sm" onClick={() => setEditingResult(null)} variant="outline" className="border-white/20"><X size={14} /></Button>
                         </div>
                       </div>
                     ) : (
                       <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm text-white/70">{result.text}</p>
-                        <div className="flex gap-1">
+                        <p className="text-sm text-white/70 break-words flex-1">{result.text}</p>
+                        <div className="flex gap-1 flex-shrink-0">
                           <button onClick={() => setEditingResult(result.id)} className="p-1.5 rounded bg-white/5 hover:bg-white/10"><Edit2 size={14} /></button>
                           <button onClick={() => handleDeleteResult(result.id)} className="p-1.5 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400"><Trash2 size={14} /></button>
                         </div>
