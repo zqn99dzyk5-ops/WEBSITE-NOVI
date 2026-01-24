@@ -1,15 +1,23 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Header
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
+from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime, timezone
-
+from datetime import datetime, timezone, timedelta
+import bcrypt
+import jwt
+from emergentintegrations.payments.stripe.checkout import (
+    StripeCheckout, 
+    CheckoutSessionResponse, 
+    CheckoutStatusResponse, 
+    CheckoutSessionRequest
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -19,54 +27,657 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
+# JWT Config
+JWT_SECRET = os.environ.get('JWT_SECRET', 'continental-academy-secret-key-2024')
+JWT_ALGORITHM = 'HS256'
+JWT_EXPIRATION_HOURS = 24
+
+# Stripe Config
+STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', 'sk_test_emergent')
+
 app = FastAPI()
-
-# Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
+security = HTTPBearer(auto_error=False)
 
+# ============= MODELS =============
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    name: str
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    email: str
+    name: str
+    role: str
+    subscription_status: str
+    created_at: str
+
+class CourseCreate(BaseModel):
+    title: str
+    description: str
+    thumbnail: str
+    mux_video_id: str
+    price: float
+    is_free: bool = False
+    order: int = 0
+
+class CourseUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    thumbnail: Optional[str] = None
+    mux_video_id: Optional[str] = None
+    price: Optional[float] = None
+    is_free: Optional[bool] = None
+    order: Optional[int] = None
+
+class CourseResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    title: str
+    description: str
+    thumbnail: str
+    mux_video_id: str
+    price: float
+    is_free: bool
+    order: int
+    created_at: str
+
+class FAQCreate(BaseModel):
+    question: str
+    answer: str
+    order: int = 0
+
+class FAQResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    question: str
+    answer: str
+    order: int
+
+class ResultCreate(BaseModel):
+    image: str
+    text: str
+    order: int = 0
+
+class ResultResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    image: str
+    text: str
+    order: int
+
+class SiteSettings(BaseModel):
+    hero_title: str = "Zaradi Sa Nama"
+    hero_subtitle: str = "Nauči vještine koje će promijeniti tvoj život"
+    intro_video_mux_id: str = ""
+    why_us_title: str = "Zašto Continental Academy?"
+    why_us_points: List[str] = []
+    stats_members: int = 1500
+    stats_projects: int = 350
+    stats_courses: int = 12
+    discord_link: str = "https://discord.gg/continentall"
+    support_text: str = "Support nam je 24/7"
+    footer_text: str = "© 2024 Continental Academy. Sva prava zadržana."
+    nav_links: List[Dict[str, str]] = []
+    pricing_plans: List[Dict[str, Any]] = []
+
+class PaymentCreate(BaseModel):
+    plan_id: str
+    origin_url: str
+
+class ContactMessage(BaseModel):
+    name: str
+    email: EmailStr
+    subject: str
+    message: str
+
+# ============= AUTH HELPERS =============
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+def create_token(user_id: str, role: str) -> str:
+    payload = {
+        'user_id': user_id,
+        'role': role,
+        'exp': datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def decode_token(token: str) -> dict:
+    try:
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token istekao")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Nevažeći token")
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Niste prijavljeni")
+    payload = decode_token(credentials.credentials)
+    user = await db.users.find_one({"id": payload['user_id']}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=401, detail="Korisnik nije pronađen")
+    return user
+
+async def get_admin_user(user: dict = Depends(get_current_user)):
+    if user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Nemate admin pristup")
+    return user
+
+async def get_optional_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not credentials:
+        return None
+    try:
+        payload = decode_token(credentials.credentials)
+        user = await db.users.find_one({"id": payload['user_id']}, {"_id": 0})
+        return user
+    except:
+        return None
+
+# ============= AUTH ROUTES =============
+
+@api_router.post("/auth/register")
+async def register(data: UserCreate):
+    existing = await db.users.find_one({"email": data.email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email već postoji")
     
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    user_id = str(uuid.uuid4())
+    user = {
+        "id": user_id,
+        "email": data.email,
+        "password": hash_password(data.password),
+        "name": data.name,
+        "role": "user",
+        "subscription_status": "inactive",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.users.insert_one(user)
+    
+    token = create_token(user_id, "user")
+    return {
+        "token": token,
+        "user": {
+            "id": user_id,
+            "email": data.email,
+            "name": data.name,
+            "role": "user",
+            "subscription_status": "inactive"
+        }
+    }
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+@api_router.post("/auth/login")
+async def login(data: UserLogin):
+    user = await db.users.find_one({"email": data.email}, {"_id": 0})
+    if not user or not verify_password(data.password, user['password']):
+        raise HTTPException(status_code=401, detail="Pogrešan email ili lozinka")
+    
+    token = create_token(user['id'], user['role'])
+    return {
+        "token": token,
+        "user": {
+            "id": user['id'],
+            "email": user['email'],
+            "name": user['name'],
+            "role": user['role'],
+            "subscription_status": user['subscription_status']
+        }
+    }
 
-# Add your routes to the router instead of directly to app
+@api_router.get("/auth/me")
+async def get_me(user: dict = Depends(get_current_user)):
+    return {
+        "id": user['id'],
+        "email": user['email'],
+        "name": user['name'],
+        "role": user['role'],
+        "subscription_status": user['subscription_status']
+    }
+
+# ============= COURSES ROUTES =============
+
+@api_router.get("/courses", response_model=List[CourseResponse])
+async def get_courses():
+    courses = await db.courses.find({}, {"_id": 0}).sort("order", 1).to_list(100)
+    return courses
+
+@api_router.get("/courses/{course_id}")
+async def get_course(course_id: str, user: dict = Depends(get_optional_user)):
+    course = await db.courses.find_one({"id": course_id}, {"_id": 0})
+    if not course:
+        raise HTTPException(status_code=404, detail="Kurs nije pronađen")
+    
+    can_access = course.get('is_free', False)
+    if user and user.get('subscription_status') == 'active':
+        can_access = True
+    if user and user.get('role') == 'admin':
+        can_access = True
+    
+    return {**course, "can_access": can_access}
+
+@api_router.post("/courses", response_model=CourseResponse)
+async def create_course(data: CourseCreate, admin: dict = Depends(get_admin_user)):
+    course_id = str(uuid.uuid4())
+    course = {
+        "id": course_id,
+        **data.model_dump(),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.courses.insert_one(course)
+    return CourseResponse(**course)
+
+@api_router.put("/courses/{course_id}")
+async def update_course(course_id: str, data: CourseUpdate, admin: dict = Depends(get_admin_user)):
+    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="Nema podataka za ažuriranje")
+    
+    result = await db.courses.update_one({"id": course_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Kurs nije pronađen")
+    
+    course = await db.courses.find_one({"id": course_id}, {"_id": 0})
+    return course
+
+@api_router.delete("/courses/{course_id}")
+async def delete_course(course_id: str, admin: dict = Depends(get_admin_user)):
+    result = await db.courses.delete_one({"id": course_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Kurs nije pronađen")
+    return {"message": "Kurs obrisan"}
+
+# ============= FAQ ROUTES =============
+
+@api_router.get("/faq", response_model=List[FAQResponse])
+async def get_faqs():
+    faqs = await db.faqs.find({}, {"_id": 0}).sort("order", 1).to_list(100)
+    return faqs
+
+@api_router.post("/faq", response_model=FAQResponse)
+async def create_faq(data: FAQCreate, admin: dict = Depends(get_admin_user)):
+    faq_id = str(uuid.uuid4())
+    faq = {"id": faq_id, **data.model_dump()}
+    await db.faqs.insert_one(faq)
+    return FAQResponse(**faq)
+
+@api_router.put("/faq/{faq_id}")
+async def update_faq(faq_id: str, data: FAQCreate, admin: dict = Depends(get_admin_user)):
+    result = await db.faqs.update_one({"id": faq_id}, {"$set": data.model_dump()})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="FAQ nije pronađen")
+    faq = await db.faqs.find_one({"id": faq_id}, {"_id": 0})
+    return faq
+
+@api_router.delete("/faq/{faq_id}")
+async def delete_faq(faq_id: str, admin: dict = Depends(get_admin_user)):
+    result = await db.faqs.delete_one({"id": faq_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="FAQ nije pronađen")
+    return {"message": "FAQ obrisan"}
+
+# ============= RESULTS ROUTES =============
+
+@api_router.get("/results", response_model=List[ResultResponse])
+async def get_results():
+    results = await db.results.find({}, {"_id": 0}).sort("order", 1).to_list(100)
+    return results
+
+@api_router.post("/results", response_model=ResultResponse)
+async def create_result(data: ResultCreate, admin: dict = Depends(get_admin_user)):
+    result_id = str(uuid.uuid4())
+    result = {"id": result_id, **data.model_dump()}
+    await db.results.insert_one(result)
+    return ResultResponse(**result)
+
+@api_router.put("/results/{result_id}")
+async def update_result(result_id: str, data: ResultCreate, admin: dict = Depends(get_admin_user)):
+    res = await db.results.update_one({"id": result_id}, {"$set": data.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Rezultat nije pronađen")
+    result = await db.results.find_one({"id": result_id}, {"_id": 0})
+    return result
+
+@api_router.delete("/results/{result_id}")
+async def delete_result(result_id: str, admin: dict = Depends(get_admin_user)):
+    result = await db.results.delete_one({"id": result_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Rezultat nije pronađen")
+    return {"message": "Rezultat obrisan"}
+
+# ============= SITE SETTINGS ROUTES =============
+
+@api_router.get("/settings")
+async def get_settings():
+    settings = await db.settings.find_one({"id": "main"}, {"_id": 0})
+    if not settings:
+        default = SiteSettings()
+        settings = {"id": "main", **default.model_dump()}
+        await db.settings.insert_one(settings)
+    return settings
+
+@api_router.put("/settings")
+async def update_settings(data: SiteSettings, admin: dict = Depends(get_admin_user)):
+    await db.settings.update_one(
+        {"id": "main"}, 
+        {"$set": data.model_dump()}, 
+        upsert=True
+    )
+    settings = await db.settings.find_one({"id": "main"}, {"_id": 0})
+    return settings
+
+# ============= PAYMENT ROUTES =============
+
+PRICING_PLANS = {
+    "monthly": {"name": "Mjesečna Pretplata", "price": 29.99, "interval": "month"},
+    "yearly": {"name": "Godišnja Pretplata", "price": 249.99, "interval": "year"},
+    "lifetime": {"name": "Doživotni Pristup", "price": 499.99, "interval": "once"}
+}
+
+@api_router.post("/payments/checkout")
+async def create_checkout(data: PaymentCreate, request: Request, user: dict = Depends(get_current_user)):
+    if data.plan_id not in PRICING_PLANS:
+        raise HTTPException(status_code=400, detail="Nevažeći plan")
+    
+    plan = PRICING_PLANS[data.plan_id]
+    host_url = str(request.base_url).rstrip('/')
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    
+    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    
+    success_url = f"{data.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{data.origin_url}/pricing"
+    
+    checkout_request = CheckoutSessionRequest(
+        amount=plan['price'],
+        currency="eur",
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={
+            "user_id": user['id'],
+            "plan_id": data.plan_id,
+            "user_email": user['email']
+        }
+    )
+    
+    session = await stripe_checkout.create_checkout_session(checkout_request)
+    
+    # Create payment transaction record
+    transaction = {
+        "id": str(uuid.uuid4()),
+        "session_id": session.session_id,
+        "user_id": user['id'],
+        "user_email": user['email'],
+        "plan_id": data.plan_id,
+        "amount": plan['price'],
+        "currency": "eur",
+        "payment_status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.payment_transactions.insert_one(transaction)
+    
+    return {"url": session.url, "session_id": session.session_id}
+
+@api_router.get("/payments/status/{session_id}")
+async def get_payment_status(session_id: str, request: Request):
+    host_url = str(request.base_url).rstrip('/')
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    
+    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    status = await stripe_checkout.get_checkout_status(session_id)
+    
+    # Update transaction and user subscription if paid
+    if status.payment_status == "paid":
+        transaction = await db.payment_transactions.find_one({"session_id": session_id})
+        if transaction and transaction.get('payment_status') != 'paid':
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}}
+            )
+            await db.users.update_one(
+                {"id": transaction['user_id']},
+                {"$set": {"subscription_status": "active"}}
+            )
+    
+    return {
+        "status": status.status,
+        "payment_status": status.payment_status,
+        "amount_total": status.amount_total,
+        "currency": status.currency
+    }
+
+@api_router.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    body = await request.body()
+    signature = request.headers.get("Stripe-Signature")
+    
+    host_url = str(request.base_url).rstrip('/')
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    
+    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    
+    try:
+        webhook_response = await stripe_checkout.handle_webhook(body, signature)
+        
+        if webhook_response.payment_status == "paid":
+            user_id = webhook_response.metadata.get("user_id")
+            if user_id:
+                await db.payment_transactions.update_one(
+                    {"session_id": webhook_response.session_id},
+                    {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}}
+                )
+                await db.users.update_one(
+                    {"id": user_id},
+                    {"$set": {"subscription_status": "active"}}
+                )
+        
+        return {"status": "ok"}
+    except Exception as e:
+        logging.error(f"Webhook error: {e}")
+        return {"status": "error", "message": str(e)}
+
+# ============= ADMIN ROUTES =============
+
+@api_router.get("/admin/stats")
+async def get_admin_stats(admin: dict = Depends(get_admin_user)):
+    total_users = await db.users.count_documents({})
+    active_subs = await db.users.count_documents({"subscription_status": "active"})
+    total_courses = await db.courses.count_documents({})
+    total_payments = await db.payment_transactions.count_documents({"payment_status": "paid"})
+    
+    recent_users = await db.users.find({}, {"_id": 0, "password": 0}).sort("created_at", -1).limit(10).to_list(10)
+    recent_payments = await db.payment_transactions.find({"payment_status": "paid"}, {"_id": 0}).sort("paid_at", -1).limit(10).to_list(10)
+    
+    return {
+        "total_users": total_users,
+        "active_subscriptions": active_subs,
+        "total_courses": total_courses,
+        "total_payments": total_payments,
+        "recent_users": recent_users,
+        "recent_payments": recent_payments
+    }
+
+@api_router.get("/admin/users")
+async def get_all_users(admin: dict = Depends(get_admin_user)):
+    users = await db.users.find({}, {"_id": 0, "password": 0}).to_list(1000)
+    return users
+
+@api_router.put("/admin/users/{user_id}/subscription")
+async def update_user_subscription(user_id: str, status: str, admin: dict = Depends(get_admin_user)):
+    if status not in ["active", "inactive"]:
+        raise HTTPException(status_code=400, detail="Nevažeći status")
+    
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"subscription_status": status}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Korisnik nije pronađen")
+    
+    return {"message": f"Status pretplate ažuriran na {status}"}
+
+@api_router.delete("/admin/users/{user_id}")
+async def delete_user(user_id: str, admin: dict = Depends(get_admin_user)):
+    result = await db.users.delete_one({"id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Korisnik nije pronađen")
+    return {"message": "Korisnik obrisan"}
+
+# ============= CONTACT ROUTES =============
+
+@api_router.post("/contact")
+async def submit_contact(data: ContactMessage):
+    message = {
+        "id": str(uuid.uuid4()),
+        **data.model_dump(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "read": False
+    }
+    await db.contact_messages.insert_one(message)
+    return {"message": "Poruka uspješno poslata"}
+
+@api_router.get("/admin/messages")
+async def get_messages(admin: dict = Depends(get_admin_user)):
+    messages = await db.contact_messages.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return messages
+
+# ============= ROOT =============
+
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "Continental Academy API"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
+# ============= SETUP =============
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
+async def create_admin_user():
+    admin = await db.users.find_one({"email": "admin@serbiana.com"})
+    if not admin:
+        admin_user = {
+            "id": str(uuid.uuid4()),
+            "email": "admin@serbiana.com",
+            "password": hash_password("admin123"),
+            "name": "Administrator",
+            "role": "admin",
+            "subscription_status": "active",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.users.insert_one(admin_user)
+        logging.info("Admin user created: admin@serbiana.com / admin123")
 
-# Include the router in the main app
+async def seed_initial_data():
+    # Check if data exists
+    courses_count = await db.courses.count_documents({})
+    if courses_count == 0:
+        # Seed courses
+        courses = [
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Osnove Online Zarade",
+                "description": "Naučite kako započeti zaradu na internetu od nule.",
+                "thumbnail": "https://images.unsplash.com/photo-1643962579745-bcaa05ffc573?w=800",
+                "mux_video_id": "placeholder",
+                "price": 0.0,
+                "is_free": True,
+                "order": 1,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Napredni Marketing",
+                "description": "Savladajte digitalni marketing i povećajte svoju zaradu.",
+                "thumbnail": "https://images.unsplash.com/photo-1648098893250-1d03dce92467?w=800",
+                "mux_video_id": "placeholder",
+                "price": 29.99,
+                "is_free": False,
+                "order": 2,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Freelancing Masterclass",
+                "description": "Postanite uspješan freelancer i radite od kuće.",
+                "thumbnail": "https://images.unsplash.com/photo-1643962579365-3a9222e923b8?w=800",
+                "mux_video_id": "placeholder",
+                "price": 49.99,
+                "is_free": False,
+                "order": 3,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+        ]
+        await db.courses.insert_many(courses)
+    
+    # Seed FAQs
+    faqs_count = await db.faqs.count_documents({})
+    if faqs_count == 0:
+        faqs = [
+            {"id": str(uuid.uuid4()), "question": "Kako mogu pristupiti kursevima?", "answer": "Nakon kupovine pretplate, svi kursevi su vam dostupni u Dashboard sekciji.", "order": 1},
+            {"id": str(uuid.uuid4()), "question": "Da li mogu otkazati pretplatu?", "answer": "Otkazivanje pretplate vrši se putem kontaktiranja našeg support tima.", "order": 2},
+            {"id": str(uuid.uuid4()), "question": "Koliko dugo imam pristup?", "answer": "Zavisno od izabranog plana - mjesečno, godišnje ili doživotno.", "order": 3},
+            {"id": str(uuid.uuid4()), "question": "Da li nudite povrat novca?", "answer": "Da, nudimo 30-dnevnu garanciju povrata novca.", "order": 4}
+        ]
+        await db.faqs.insert_many(faqs)
+    
+    # Seed Results
+    results_count = await db.results.count_documents({})
+    if results_count == 0:
+        results = [
+            {"id": str(uuid.uuid4()), "image": "https://images.unsplash.com/photo-1492337034744-218795d77f43?w=800", "text": "Marko - Zaradio 5000€ u prvom mjesecu", "order": 1},
+            {"id": str(uuid.uuid4()), "image": "https://images.unsplash.com/photo-1630941697803-5eec7b685a72?w=800", "text": "Ana - Napustila posao i sada radi od kuće", "order": 2}
+        ]
+        await db.results.insert_many(results)
+    
+    # Seed Settings
+    settings = await db.settings.find_one({"id": "main"})
+    if not settings:
+        default_settings = {
+            "id": "main",
+            "hero_title": "Zaradi Sa Nama",
+            "hero_subtitle": "Nauči vještine koje će promijeniti tvoj život i finansijsku budućnost",
+            "intro_video_mux_id": "",
+            "why_us_title": "Zašto Baš Continental Academy?",
+            "why_us_points": [
+                "Provjerene metode zarade",
+                "Podrška 24/7",
+                "Zajednica od 1500+ članova",
+                "Praktični kursevi sa primjerima"
+            ],
+            "stats_members": 1500,
+            "stats_projects": 350,
+            "stats_courses": 12,
+            "discord_link": "https://discord.gg/continentall",
+            "support_text": "Support nam je 24/7",
+            "footer_text": "© 2024 Continental Academy. Sva prava zadržana.",
+            "nav_links": [
+                {"label": "Početna", "href": "/"},
+                {"label": "Kursevi", "href": "/courses"},
+                {"label": "Cjenovnik", "href": "/pricing"},
+                {"label": "O nama", "href": "/about"},
+                {"label": "Kontakt", "href": "/contact"}
+            ],
+            "pricing_plans": [
+                {"id": "monthly", "name": "Mjesečna", "price": 29.99, "features": ["Pristup svim kursevima", "Discord zajednica", "Mjesečni webinari"]},
+                {"id": "yearly", "name": "Godišnja", "price": 249.99, "features": ["Sve iz mjesečne", "2 mjeseca gratis", "1-na-1 konzultacije"]},
+                {"id": "lifetime", "name": "Doživotna", "price": 499.99, "features": ["Sve iz godišnje", "Doživotni pristup", "VIP podrška"]}
+            ]
+        }
+        await db.settings.insert_one(default_settings)
+
+@app.on_event("startup")
+async def startup():
+    await create_admin_user()
+    await seed_initial_data()
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -77,7 +688,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
