@@ -59,6 +59,19 @@ class UserResponse(BaseModel):
     subscription_status: str
     created_at: str
 
+class LessonCreate(BaseModel):
+    title: str
+    mux_video_id: str
+    order: int = 0
+
+class LessonResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    course_id: str
+    title: str
+    mux_video_id: str
+    order: int
+
 class CourseCreate(BaseModel):
     title: str
     description: str
@@ -67,6 +80,8 @@ class CourseCreate(BaseModel):
     price: float
     is_free: bool = False
     order: int = 0
+    course_type: str = "single"  # single, bundle
+    included_courses: List[str] = []  # For bundles - list of course IDs included
 
 class CourseUpdate(BaseModel):
     title: Optional[str] = None
@@ -76,6 +91,8 @@ class CourseUpdate(BaseModel):
     price: Optional[float] = None
     is_free: Optional[bool] = None
     order: Optional[int] = None
+    course_type: Optional[str] = None
+    included_courses: Optional[List[str]] = None
 
 class CourseResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -87,7 +104,13 @@ class CourseResponse(BaseModel):
     price: float
     is_free: bool
     order: int
+    course_type: str = "single"
+    included_courses: List[str] = []
     created_at: str
+
+class AssignCourseRequest(BaseModel):
+    user_id: str
+    course_id: str
 
 class FAQCreate(BaseModel):
     question: str
