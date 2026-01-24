@@ -160,6 +160,10 @@ class CoursePurchase(BaseModel):
     course_id: str
     origin_url: str
 
+class ShopProductPurchase(BaseModel):
+    product_id: str
+    origin_url: str
+
 class ContactMessage(BaseModel):
     name: str
     email: EmailStr
@@ -544,6 +548,59 @@ async def purchase_course(data: CoursePurchase, request: Request, user: dict = D
         "currency": "eur",
         "payment_status": "pending",
         "type": "course",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.payment_transactions.insert_one(transaction)
+    
+    return {"url": session.url, "session_id": session.session_id}
+
+@api_router.post("/checkout/shop-product")
+async def purchase_shop_product(data: ShopProductPurchase, request: Request, user: dict = Depends(get_current_user)):
+    """Create Stripe checkout session for shop product purchase"""
+    # Check if product exists
+    product = await db.shop_products.find_one({"id": data.product_id}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Proizvod nije pronađen")
+    
+    if not product.get('in_stock', False):
+        raise HTTPException(status_code=400, detail="Proizvod nije na stanju")
+    
+    host_url = str(request.base_url).rstrip('/')
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    
+    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    
+    success_url = f"{data.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}&type=shop"
+    cancel_url = f"{data.origin_url}/shop"
+    
+    checkout_request = CheckoutSessionRequest(
+        amount=product['price'],
+        currency="eur",
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={
+            "user_id": user['id'],
+            "product_id": data.product_id,
+            "user_email": user['email'],
+            "type": "shop_product",
+            "product_title": product['title']
+        }
+    )
+    
+    session = await stripe_checkout.create_checkout_session(checkout_request)
+    
+    # Create transaction record
+    transaction = {
+        "id": str(uuid.uuid4()),
+        "session_id": session.session_id,
+        "user_id": user['id'],
+        "user_email": user['email'],
+        "product_id": data.product_id,
+        "product_title": product['title'],
+        "amount": product['price'],
+        "currency": "eur",
+        "payment_status": "pending",
+        "type": "shop_product",
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.payment_transactions.insert_one(transaction)
