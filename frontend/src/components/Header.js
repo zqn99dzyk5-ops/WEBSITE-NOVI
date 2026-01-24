@@ -28,6 +28,7 @@ export const Header = () => {
   const navLinks = [
     { label: 'Početna', href: '/' },
     { label: 'Kursevi', href: '/courses' },
+    { label: 'Shop', href: '/shop' },
     { label: 'Cjenovnik', href: '/pricing' },
     { label: 'O nama', href: '/about' },
     { label: 'Kontakt', href: '/contact' },
