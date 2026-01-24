@@ -603,21 +603,23 @@ export default function AdminPage() {
               {courses.map((course) => (
                 <div key={course.id} className="glass-card rounded-xl p-4">
                   {editingCourse === course.id ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <Input value={course.title} onChange={(e) => setCourses(courses.map(c => c.id === course.id ? { ...c, title: e.target.value } : c))} className="bg-white/5 border-white/10" />
-                      <Input value={course.thumbnail} onChange={(e) => setCourses(courses.map(c => c.id === course.id ? { ...c, thumbnail: e.target.value } : c))} className="bg-white/5 border-white/10" />
-                      <Input type="number" value={course.price} onChange={(e) => setCourses(courses.map(c => c.id === course.id ? { ...c, price: parseFloat(e.target.value) || 0 } : c))} className="bg-white/5 border-white/10" />
-                      <div className="flex gap-2 md:col-span-2">
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Input value={course.title} onChange={(e) => setCourses(courses.map(c => c.id === course.id ? { ...c, title: e.target.value } : c))} className="bg-white/5 border-white/10" placeholder="Naslov" />
+                        <Input type="number" value={course.price} onChange={(e) => setCourses(courses.map(c => c.id === course.id ? { ...c, price: parseFloat(e.target.value) || 0 } : c))} className="bg-white/5 border-white/10" placeholder="Cijena" />
+                      </div>
+                      <Input value={course.thumbnail} onChange={(e) => setCourses(courses.map(c => c.id === course.id ? { ...c, thumbnail: e.target.value } : c))} className="bg-white/5 border-white/10" placeholder="Thumbnail URL" />
+                      <div className="flex flex-wrap gap-2">
                         <Button onClick={() => handleUpdateCourse(course.id, course)} className="btn-gradient"><Save size={16} className="mr-2" />Sačuvaj</Button>
-                        <Button onClick={() => setEditingCourse(null)} variant="outline" className="btn-outline"><X size={16} className="mr-2" />Otkaži</Button>
+                        <Button onClick={() => setEditingCourse(null)} variant="outline" className="border-white/20"><X size={16} className="mr-2" />Otkaži</Button>
                       </div>
                     </div>
                   ) : (
                     <div className="flex items-center gap-4">
-                      <img src={course.thumbnail} alt={course.title} className="w-20 h-12 object-cover rounded-lg" />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-semibold">{course.title}</h4>
+                      <img src={course.thumbnail} alt={course.title} className="w-20 h-12 object-cover rounded-lg flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-semibold truncate">{course.title}</h4>
                           {course.course_type === 'bundle' && <span className="px-2 py-0.5 rounded text-xs bg-purple-500/20 text-purple-400">Bundle</span>}
                         </div>
                         <p className="text-sm text-white/50">€{course.price} {course.is_free && '(Besplatno)'}</p>
