@@ -19,7 +19,8 @@ RUN pip install --no-cache-dir \
     python-multipart==0.0.21 \
     python-dotenv==1.2.1 \
     stripe==14.1.0 \
-    httpx==0.28.1
+    httpx==0.28.1 \
+    PyJWT==2.10.1
 
 # Copy application code
 COPY backend/ .
