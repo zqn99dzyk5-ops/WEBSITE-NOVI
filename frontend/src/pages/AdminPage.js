@@ -71,14 +71,15 @@ export default function AdminPage() {
   const fetchAllData = async () => {
     setLoading(true);
     try {
-      const [statsRes, usersRes, coursesRes, faqsRes, resultsRes, messagesRes, settingsRes] = await Promise.all([
+      const [statsRes, usersRes, coursesRes, faqsRes, resultsRes, messagesRes, settingsRes, shopRes] = await Promise.all([
         axios.get(`${API}/admin/stats`, { headers }),
         axios.get(`${API}/admin/users`, { headers }),
         axios.get(`${API}/courses`),
         axios.get(`${API}/faq`),
         axios.get(`${API}/results`),
         axios.get(`${API}/admin/messages`, { headers }),
-        axios.get(`${API}/settings`)
+        axios.get(`${API}/settings`),
+        axios.get(`${API}/shop`)
       ]);
       setStats(statsRes.data);
       setUsers(usersRes.data);
@@ -87,6 +88,7 @@ export default function AdminPage() {
       setResults(resultsRes.data);
       setMessages(messagesRes.data);
       setSettings(settingsRes.data);
+      setShopProducts(shopRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Greška pri učitavanju podataka');
