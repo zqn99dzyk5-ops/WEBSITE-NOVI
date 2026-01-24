@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axios from 'axios';
-import { Check, ShoppingCart, Youtube, Facebook, ExternalLink } from 'lucide-react';
+import { Check, ShoppingCart, Youtube, Facebook, ExternalLink, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 
@@ -17,10 +17,12 @@ const TikTokIcon = ({ size = 24, className = "" }) => (
 );
 
 export default function ShopPage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [purchasingId, setPurchasingId] = useState(null);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -59,12 +61,41 @@ export default function ShopPage() {
     }
   };
 
-  const handleBuy = (product) => {
+  const handleBuy = async (product) => {
     if (!user) {
       toast.error('Morate se prijaviti da biste kupili');
+      navigate('/auth/login');
       return;
     }
-    toast.info('Kontaktirajte nas na Discord za kupovinu: discord.gg/continentall');
+    
+    if (!product.in_stock) {
+      toast.error('Proizvod nije na stanju');
+      return;
+    }
+
+    setPurchasingId(product.id);
+    
+    try {
+      const response = await axios.post(
+        `${API}/checkout/shop-product`,
+        {
+          product_id: product.id,
+          origin_url: window.location.origin
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+      
+      if (response.data.url) {
+        window.location.href = response.data.url;
+      }
+    } catch (error) {
+      console.error('Checkout error:', error);
+      toast.error(error.response?.data?.detail || 'Greška pri kreiranju narudžbe');
+    } finally {
+      setPurchasingId(null);
+    }
   };
 
   const containerVariants = {
@@ -198,14 +229,24 @@ export default function ShopPage() {
                     </span>
                     <button
                       onClick={() => handleBuy(product)}
-                      disabled={!product.in_stock}
-                      className={`px-6 py-3 rounded-full font-semibold transition-all ${
-                        product.in_stock
+                      disabled={!product.in_stock || purchasingId === product.id}
+                      className={`px-6 py-3 rounded-full font-semibold transition-all flex items-center gap-2 ${
+                        product.in_stock && purchasingId !== product.id
                           ? 'btn-gradient shadow-[0_0_20px_rgba(255,69,0,0.3)]'
                           : 'bg-white/10 text-white/50 cursor-not-allowed'
                       }`}
+                      data-testid={`buy-btn-${product.id}`}
                     >
-                      {product.in_stock ? 'Kupi Sada' : 'Rasprodato'}
+                      {purchasingId === product.id ? (
+                        <>
+                          <Loader2 size={18} className="animate-spin" />
+                          Učitavanje...
+                        </>
+                      ) : product.in_stock ? (
+                        'Kupi Sada'
+                      ) : (
+                        'Rasprodato'
+                      )}
                     </button>
                   </div>
                 </div>
