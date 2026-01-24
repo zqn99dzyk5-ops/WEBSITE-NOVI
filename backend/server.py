@@ -380,6 +380,46 @@ async def delete_result(result_id: str, admin: dict = Depends(get_admin_user)):
         raise HTTPException(status_code=404, detail="Rezultat nije pronađen")
     return {"message": "Rezultat obrisan"}
 
+# ============= SHOP ROUTES =============
+
+@api_router.get("/shop", response_model=List[ShopProductResponse])
+async def get_shop_products():
+    products = await db.shop_products.find({}, {"_id": 0}).sort("order", 1).to_list(100)
+    return products
+
+@api_router.get("/shop/{product_id}")
+async def get_shop_product(product_id: str):
+    product = await db.shop_products.find_one({"id": product_id}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Proizvod nije pronađen")
+    return product
+
+@api_router.post("/shop", response_model=ShopProductResponse)
+async def create_shop_product(data: ShopProductCreate, admin: dict = Depends(get_admin_user)):
+    product_id = str(uuid.uuid4())
+    product = {
+        "id": product_id,
+        **data.model_dump(),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.shop_products.insert_one(product)
+    return ShopProductResponse(**product)
+
+@api_router.put("/shop/{product_id}")
+async def update_shop_product(product_id: str, data: ShopProductCreate, admin: dict = Depends(get_admin_user)):
+    result = await db.shop_products.update_one({"id": product_id}, {"$set": data.model_dump()})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Proizvod nije pronađen")
+    product = await db.shop_products.find_one({"id": product_id}, {"_id": 0})
+    return product
+
+@api_router.delete("/shop/{product_id}")
+async def delete_shop_product(product_id: str, admin: dict = Depends(get_admin_user)):
+    result = await db.shop_products.delete_one({"id": product_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Proizvod nije pronađen")
+    return {"message": "Proizvod obrisan"}
+
 # ============= SITE SETTINGS ROUTES =============
 
 @api_router.get("/settings")
