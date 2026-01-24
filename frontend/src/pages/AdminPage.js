@@ -696,6 +696,114 @@ export default function AdminPage() {
             </div>
           </TabsContent>
 
+          {/* Shop Tab */}
+          <TabsContent value="shop" className="space-y-6">
+            <div className="glass-card rounded-xl p-6">
+              <h3 className="font-semibold mb-4">Novi Proizvod</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  placeholder="Naslov"
+                  value={newShopProduct.title}
+                  onChange={(e) => setNewShopProduct({ ...newShopProduct, title: e.target.value })}
+                  className="bg-white/5 border-white/10"
+                />
+                <Input
+                  placeholder="Thumbnail URL"
+                  value={newShopProduct.thumbnail}
+                  onChange={(e) => setNewShopProduct({ ...newShopProduct, thumbnail: e.target.value })}
+                  className="bg-white/5 border-white/10"
+                />
+                <select
+                  value={newShopProduct.platform}
+                  onChange={(e) => setNewShopProduct({ ...newShopProduct, platform: e.target.value })}
+                  className="h-10 px-3 rounded-md bg-white/5 border border-white/10 text-white"
+                >
+                  <option value="youtube">YouTube</option>
+                  <option value="tiktok">TikTok</option>
+                  <option value="facebook">Facebook</option>
+                </select>
+                <Input
+                  type="number"
+                  placeholder="Cijena"
+                  value={newShopProduct.price}
+                  onChange={(e) => setNewShopProduct({ ...newShopProduct, price: parseFloat(e.target.value) || 0 })}
+                  className="bg-white/5 border-white/10"
+                />
+                <Input
+                  placeholder="Opis"
+                  value={newShopProduct.description}
+                  onChange={(e) => setNewShopProduct({ ...newShopProduct, description: e.target.value })}
+                  className="bg-white/5 border-white/10 md:col-span-2"
+                />
+                <div className="md:col-span-2">
+                  <div className="flex gap-2 mb-2">
+                    <Input
+                      placeholder="Dodaj feature..."
+                      value={newFeature}
+                      onChange={(e) => setNewFeature(e.target.value)}
+                      className="bg-white/5 border-white/10"
+                      onKeyPress={(e) => e.key === 'Enter' && addFeatureToProduct()}
+                    />
+                    <Button onClick={addFeatureToProduct} variant="outline" className="btn-outline">
+                      <Plus size={16} />
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {newShopProduct.features.map((f, i) => (
+                      <span key={i} className="px-3 py-1 rounded-full bg-white/10 text-sm flex items-center gap-2">
+                        {f}
+                        <button onClick={() => setNewShopProduct({ ...newShopProduct, features: newShopProduct.features.filter((_, idx) => idx !== i) })}>
+                          <X size={14} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newShopProduct.in_stock}
+                      onChange={(e) => setNewShopProduct({ ...newShopProduct, in_stock: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    <span>Na stanju</span>
+                  </label>
+                </div>
+                <Button onClick={handleCreateShopProduct} className="btn-gradient">
+                  <Plus size={18} className="mr-2" />
+                  Dodaj Proizvod
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {shopProducts.map((product) => (
+                <div key={product.id} className="glass-card rounded-xl overflow-hidden">
+                  <div className="aspect-video relative">
+                    <img src={product.thumbnail} alt={product.title} className="w-full h-full object-cover" />
+                    <span className={`absolute top-2 left-2 px-2 py-1 rounded text-xs ${
+                      product.platform === 'youtube' ? 'bg-red-500/80' : 
+                      product.platform === 'tiktok' ? 'bg-pink-500/80' : 'bg-blue-500/80'
+                    }`}>
+                      {product.platform}
+                    </span>
+                  </div>
+                  <div className="p-4">
+                    <h4 className="font-semibold mb-1">{product.title}</h4>
+                    <p className="text-lg font-bold text-[#FF4500] mb-2">€{product.price}</p>
+                    <p className="text-sm text-white/50 mb-3">{product.in_stock ? 'Na stanju' : 'Rasprodato'}</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleDeleteShopProduct(product.id)} className="flex-1 p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm">
+                        <Trash2 size={14} className="inline mr-1" /> Obriši
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </TabsContent>
+
           {/* Messages Tab */}
           <TabsContent value="messages">
             <div className="space-y-4">
