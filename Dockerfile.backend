@@ -7,11 +7,19 @@ RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY backend/requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies directly
+RUN pip install --no-cache-dir \
+    fastapi==0.110.1 \
+    uvicorn[standard]==0.25.0 \
+    motor==3.3.1 \
+    pymongo==4.5.0 \
+    pydantic[email]==2.12.5 \
+    python-jose[cryptography]==3.5.0 \
+    passlib[bcrypt]==1.7.4 \
+    python-multipart==0.0.21 \
+    python-dotenv==1.2.1 \
+    stripe==14.1.0 \
+    httpx==0.28.1
 
 # Copy application code
 COPY backend/ .
