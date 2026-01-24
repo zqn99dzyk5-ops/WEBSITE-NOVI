@@ -69,11 +69,13 @@ h1, h2, h3, h4, h5, h6 {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    filter: drop-shadow(0 0 30px rgba(255, 69, 0, 0.4));
 }
 
 /* Gradient Background */
 .gradient-bg {
     background: linear-gradient(135deg, #FF4500 0%, #FF1493 100%);
+    box-shadow: 0 0 40px rgba(255, 69, 0, 0.4);
 }
 
 /* Gradient Border */
