@@ -211,6 +211,47 @@ export default function AdminPage() {
     }
   };
 
+  // Shop handlers
+  const handleCreateShopProduct = async () => {
+    try {
+      await axios.post(`${API}/shop`, newShopProduct, { headers });
+      toast.success('Proizvod kreiran!');
+      setNewShopProduct({ title: '', description: '', thumbnail: '', platform: 'youtube', price: 0, features: [], in_stock: true, order: 0 });
+      fetchAllData();
+    } catch (error) {
+      toast.error('Greška pri kreiranju proizvoda');
+    }
+  };
+
+  const handleUpdateShopProduct = async (id, data) => {
+    try {
+      await axios.put(`${API}/shop/${id}`, data, { headers });
+      toast.success('Proizvod ažuriran!');
+      setEditingShopProduct(null);
+      fetchAllData();
+    } catch (error) {
+      toast.error('Greška pri ažuriranju proizvoda');
+    }
+  };
+
+  const handleDeleteShopProduct = async (id) => {
+    if (!window.confirm('Da li ste sigurni?')) return;
+    try {
+      await axios.delete(`${API}/shop/${id}`, { headers });
+      toast.success('Proizvod obrisan!');
+      fetchAllData();
+    } catch (error) {
+      toast.error('Greška pri brisanju proizvoda');
+    }
+  };
+
+  const addFeatureToProduct = () => {
+    if (newFeature.trim()) {
+      setNewShopProduct({ ...newShopProduct, features: [...newShopProduct.features, newFeature.trim()] });
+      setNewFeature('');
+    }
+  };
+
   // Settings handler
   const handleUpdateSettings = async () => {
     try {
