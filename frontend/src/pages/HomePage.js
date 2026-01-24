@@ -428,35 +428,53 @@ export default function HomePage() {
               </motion.p>
             </motion.div>
 
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-              variants={containerVariants}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
-            >
-              {results.map((result, index) => (
-                <motion.div
-                  key={result.id}
-                  variants={itemVariants}
-                  className="group relative"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-[#FF4500]/20 to-[#FF1493]/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="relative glass-card rounded-2xl overflow-hidden border border-white/10 hover:border-[#FF4500]/40 transition-all">
-                    <div className="aspect-[4/3] overflow-hidden">
-                      <img
-                        src={result.image}
-                        alt={result.text}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-                    </div>
-                    <div className="p-6">
-                      <p className="text-white/80">{result.text}</p>
+            {/* Horizontal Auto-Scrolling Carousel */}
+            <div className="relative overflow-hidden">
+              <div className="flex gap-6 animate-scroll">
+                {/* First set of results */}
+                {results.map((result) => (
+                  <div
+                    key={result.id}
+                    className="flex-shrink-0 w-[350px] group relative"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-[#FF4500]/20 to-[#FF1493]/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative glass-card rounded-2xl overflow-hidden border border-white/10 hover:border-[#FF4500]/40 transition-all">
+                      <div className="aspect-[4/3] overflow-hidden">
+                        <img
+                          src={result.image}
+                          alt={result.text}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                      </div>
+                      <div className="p-6">
+                        <p className="text-white/80">{result.text}</p>
+                      </div>
                     </div>
                   </div>
-                </motion.div>
-              ))}
-            </motion.div>
+                ))}
+                {/* Duplicate set for seamless loop */}
+                {results.map((result) => (
+                  <div
+                    key={`dup-${result.id}`}
+                    className="flex-shrink-0 w-[350px] group relative"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-[#FF4500]/20 to-[#FF1493]/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative glass-card rounded-2xl overflow-hidden border border-white/10 hover:border-[#FF4500]/40 transition-all">
+                      <div className="aspect-[4/3] overflow-hidden">
+                        <img
+                          src={result.image}
+                          alt={result.text}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                      </div>
+                      <div className="p-6">
+                        <p className="text-white/80">{result.text}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
       )}
