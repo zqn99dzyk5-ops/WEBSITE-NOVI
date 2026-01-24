@@ -351,7 +351,164 @@ async def delete_course(course_id: str, admin: dict = Depends(get_admin_user)):
     result = await db.courses.delete_one({"id": course_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Kurs nije pronađen")
+    # Also delete all lessons for this course
+    await db.lessons.delete_many({"course_id": course_id})
     return {"message": "Kurs obrisan"}
+
+# ============= LESSONS ROUTES =============
+
+@api_router.get("/courses/{course_id}/lessons")
+async def get_course_lessons(course_id: str, user: dict = Depends(get_optional_user)):
+    """Get all lessons for a course"""
+    # Check if course exists
+    course = await db.courses.find_one({"id": course_id}, {"_id": 0})
+    if not course:
+        raise HTTPException(status_code=404, detail="Kurs nije pronađen")
+    
+    # Check access
+    can_access = course.get('is_free', False)
+    if user:
+        if user.get('role') == 'admin':
+            can_access = True
+        elif user.get('subscription_status') == 'active':
+            can_access = True
+        else:
+            # Check if user purchased this course or a bundle containing it
+            user_courses = await db.user_courses.find({"user_id": user['id']}, {"_id": 0}).to_list(100)
+            user_course_ids = [uc['course_id'] for uc in user_courses]
+            
+            if course_id in user_course_ids:
+                can_access = True
+            else:
+                # Check if user has a bundle that includes this course
+                for uc_id in user_course_ids:
+                    bundle = await db.courses.find_one({"id": uc_id, "course_type": "bundle"}, {"_id": 0})
+                    if bundle and course_id in bundle.get('included_courses', []):
+                        can_access = True
+                        break
+    
+    if not can_access:
+        raise HTTPException(status_code=403, detail="Nemate pristup ovom kursu")
+    
+    lessons = await db.lessons.find({"course_id": course_id}, {"_id": 0}).sort("order", 1).to_list(100)
+    return lessons
+
+@api_router.post("/courses/{course_id}/lessons")
+async def create_lesson(course_id: str, data: LessonCreate, admin: dict = Depends(get_admin_user)):
+    """Create a new lesson for a course"""
+    # Verify course exists
+    course = await db.courses.find_one({"id": course_id})
+    if not course:
+        raise HTTPException(status_code=404, detail="Kurs nije pronađen")
+    
+    lesson_id = str(uuid.uuid4())
+    lesson = {
+        "id": lesson_id,
+        "course_id": course_id,
+        **data.model_dump()
+    }
+    await db.lessons.insert_one(lesson)
+    return LessonResponse(**lesson)
+
+@api_router.put("/lessons/{lesson_id}")
+async def update_lesson(lesson_id: str, data: LessonCreate, admin: dict = Depends(get_admin_user)):
+    """Update a lesson"""
+    result = await db.lessons.update_one({"id": lesson_id}, {"$set": data.model_dump()})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Lekcija nije pronađena")
+    lesson = await db.lessons.find_one({"id": lesson_id}, {"_id": 0})
+    return lesson
+
+@api_router.delete("/lessons/{lesson_id}")
+async def delete_lesson(lesson_id: str, admin: dict = Depends(get_admin_user)):
+    """Delete a lesson"""
+    result = await db.lessons.delete_one({"id": lesson_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Lekcija nije pronađena")
+    return {"message": "Lekcija obrisana"}
+
+@api_router.get("/user/lessons")
+async def get_user_lessons(user: dict = Depends(get_current_user)):
+    """Get all lessons accessible to the current user based on their purchased courses"""
+    # Get user's purchased courses
+    user_courses = await db.user_courses.find({"user_id": user['id']}, {"_id": 0}).to_list(100)
+    accessible_course_ids = set()
+    
+    for uc in user_courses:
+        course_id = uc['course_id']
+        accessible_course_ids.add(course_id)
+        
+        # Check if it's a bundle and add included courses
+        course = await db.courses.find_one({"id": course_id}, {"_id": 0})
+        if course and course.get('course_type') == 'bundle':
+            for included_id in course.get('included_courses', []):
+                accessible_course_ids.add(included_id)
+    
+    # Get all lessons for accessible courses
+    lessons_with_courses = []
+    for course_id in accessible_course_ids:
+        course = await db.courses.find_one({"id": course_id}, {"_id": 0})
+        if course:
+            lessons = await db.lessons.find({"course_id": course_id}, {"_id": 0}).sort("order", 1).to_list(100)
+            if lessons:
+                lessons_with_courses.append({
+                    "course": course,
+                    "lessons": lessons
+                })
+    
+    return lessons_with_courses
+
+# ============= ADMIN ASSIGN COURSE =============
+
+@api_router.post("/admin/assign-course")
+async def admin_assign_course(data: AssignCourseRequest, admin: dict = Depends(get_admin_user)):
+    """Admin can manually assign a course to a user"""
+    # Check if user exists
+    user = await db.users.find_one({"id": data.user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Korisnik nije pronađen")
+    
+    # Check if course exists
+    course = await db.courses.find_one({"id": data.course_id})
+    if not course:
+        raise HTTPException(status_code=404, detail="Kurs nije pronađen")
+    
+    # Check if already assigned
+    existing = await db.user_courses.find_one({"user_id": data.user_id, "course_id": data.course_id})
+    if existing:
+        raise HTTPException(status_code=400, detail="Korisnik već ima ovaj kurs")
+    
+    # Assign course
+    await db.user_courses.insert_one({
+        "user_id": data.user_id,
+        "course_id": data.course_id,
+        "assigned_by_admin": True,
+        "purchased_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"message": f"Kurs '{course['title']}' dodijeljen korisniku {user['email']}"}
+
+@api_router.delete("/admin/remove-course/{user_id}/{course_id}")
+async def admin_remove_course(user_id: str, course_id: str, admin: dict = Depends(get_admin_user)):
+    """Admin can remove a course from a user"""
+    result = await db.user_courses.delete_one({"user_id": user_id, "course_id": course_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Kurs nije pronađen za ovog korisnika")
+    return {"message": "Kurs uklonjen od korisnika"}
+
+@api_router.get("/admin/user-courses/{user_id}")
+async def get_user_assigned_courses(user_id: str, admin: dict = Depends(get_admin_user)):
+    """Get all courses assigned to a specific user"""
+    user_courses = await db.user_courses.find({"user_id": user_id}, {"_id": 0}).to_list(100)
+    course_ids = [uc['course_id'] for uc in user_courses]
+    
+    courses = []
+    for course_id in course_ids:
+        course = await db.courses.find_one({"id": course_id}, {"_id": 0})
+        if course:
+            courses.append(course)
+    
+    return courses
 
 # ============= FAQ ROUTES =============
 
