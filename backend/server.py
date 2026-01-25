@@ -12,12 +12,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
-from emergentintegrations.payments.stripe.checkout import (
-    StripeCheckout, 
-    CheckoutSessionResponse, 
-    CheckoutStatusResponse, 
-    CheckoutSessionRequest
-)
+import stripe
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -643,32 +638,40 @@ async def create_checkout(data: PaymentCreate, request: Request, user: dict = De
         raise HTTPException(status_code=400, detail="Nevažeći plan")
     
     plan = PRICING_PLANS[data.plan_id]
-    host_url = str(request.base_url).rstrip('/')
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    
-    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    stripe.api_key = STRIPE_API_KEY
     
     success_url = f"{data.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{data.origin_url}/courses"
     
-    checkout_request = CheckoutSessionRequest(
-        amount=plan['price'],
-        currency="eur",
-        success_url=success_url,
-        cancel_url=cancel_url,
-        metadata={
-            "user_id": user['id'],
-            "plan_id": data.plan_id,
-            "user_email": user['email']
-        }
-    )
-    
-    session = await stripe_checkout.create_checkout_session(checkout_request)
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'eur',
+                    'product_data': {
+                        'name': plan['name'],
+                    },
+                    'unit_amount': int(plan['price'] * 100),
+                },
+                'quantity': 1,
+            }],
+            mode='payment',
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={
+                "user_id": user['id'],
+                "plan_id": data.plan_id,
+                "user_email": user['email']
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     
     # Create payment transaction record
     transaction = {
         "id": str(uuid.uuid4()),
-        "session_id": session.session_id,
+        "session_id": session.id,
         "user_id": user['id'],
         "user_email": user['email'],
         "plan_id": data.plan_id,
@@ -679,7 +682,7 @@ async def create_checkout(data: PaymentCreate, request: Request, user: dict = De
     }
     await db.payment_transactions.insert_one(transaction)
     
-    return {"url": session.url, "session_id": session.session_id}
+    return {"url": session.url, "session_id": session.id}
 
 @api_router.post("/payments/course")
 async def purchase_course(data: CoursePurchase, request: Request, user: dict = Depends(get_current_user)):
@@ -693,33 +696,41 @@ async def purchase_course(data: CoursePurchase, request: Request, user: dict = D
     if existing:
         raise HTTPException(status_code=400, detail="Već ste kupili ovaj kurs")
     
-    host_url = str(request.base_url).rstrip('/')
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    
-    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    stripe.api_key = STRIPE_API_KEY
     
     success_url = f"{data.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}&type=course"
     cancel_url = f"{data.origin_url}/courses/{data.course_id}"
     
-    checkout_request = CheckoutSessionRequest(
-        amount=course['price'],
-        currency="eur",
-        success_url=success_url,
-        cancel_url=cancel_url,
-        metadata={
-            "user_id": user['id'],
-            "course_id": data.course_id,
-            "user_email": user['email'],
-            "type": "course"
-        }
-    )
-    
-    session = await stripe_checkout.create_checkout_session(checkout_request)
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'eur',
+                    'product_data': {
+                        'name': course['title'],
+                    },
+                    'unit_amount': int(course['price'] * 100),
+                },
+                'quantity': 1,
+            }],
+            mode='payment',
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={
+                "user_id": user['id'],
+                "course_id": data.course_id,
+                "user_email": user['email'],
+                "type": "course"
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     
     # Create transaction record
     transaction = {
         "id": str(uuid.uuid4()),
-        "session_id": session.session_id,
+        "session_id": session.id,
         "user_id": user['id'],
         "user_email": user['email'],
         "course_id": data.course_id,
@@ -732,7 +743,7 @@ async def purchase_course(data: CoursePurchase, request: Request, user: dict = D
     }
     await db.payment_transactions.insert_one(transaction)
     
-    return {"url": session.url, "session_id": session.session_id}
+    return {"url": session.url, "session_id": session.id}
 
 @api_router.post("/checkout/shop-product")
 async def purchase_shop_product(data: ShopProductPurchase, request: Request, user: dict = Depends(get_current_user)):
@@ -745,34 +756,42 @@ async def purchase_shop_product(data: ShopProductPurchase, request: Request, use
     if not product.get('in_stock', False):
         raise HTTPException(status_code=400, detail="Proizvod nije na stanju")
     
-    host_url = str(request.base_url).rstrip('/')
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    
-    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    stripe.api_key = STRIPE_API_KEY
     
     success_url = f"{data.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}&type=shop"
     cancel_url = f"{data.origin_url}/shop"
     
-    checkout_request = CheckoutSessionRequest(
-        amount=product['price'],
-        currency="eur",
-        success_url=success_url,
-        cancel_url=cancel_url,
-        metadata={
-            "user_id": user['id'],
-            "product_id": data.product_id,
-            "user_email": user['email'],
-            "type": "shop_product",
-            "product_title": product['title']
-        }
-    )
-    
-    session = await stripe_checkout.create_checkout_session(checkout_request)
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'eur',
+                    'product_data': {
+                        'name': product['title'],
+                    },
+                    'unit_amount': int(product['price'] * 100),
+                },
+                'quantity': 1,
+            }],
+            mode='payment',
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={
+                "user_id": user['id'],
+                "product_id": data.product_id,
+                "user_email": user['email'],
+                "type": "shop_product",
+                "product_title": product['title']
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     
     # Create transaction record
     transaction = {
         "id": str(uuid.uuid4()),
-        "session_id": session.session_id,
+        "session_id": session.id,
         "user_id": user['id'],
         "user_email": user['email'],
         "product_id": data.product_id,
@@ -785,18 +804,20 @@ async def purchase_shop_product(data: ShopProductPurchase, request: Request, use
     }
     await db.payment_transactions.insert_one(transaction)
     
-    return {"url": session.url, "session_id": session.session_id}
+    return {"url": session.url, "session_id": session.id}
 
 @api_router.get("/payments/status/{session_id}")
 async def get_payment_status(session_id: str, request: Request):
-    host_url = str(request.base_url).rstrip('/')
-    webhook_url = f"{host_url}/api/webhook/stripe"
+    stripe.api_key = STRIPE_API_KEY
     
-    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
-    status = await stripe_checkout.get_checkout_status(session_id)
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+        payment_status = "paid" if session.payment_status == "paid" else "pending"
+    except Exception as e:
+        raise HTTPException(status_code=404, detail="Session not found")
     
     # Update transaction and user if paid
-    if status.payment_status == "paid":
+    if payment_status == "paid":
         transaction = await db.payment_transactions.find_one({"session_id": session_id})
         if transaction and transaction.get('payment_status') != 'paid':
             await db.payment_transactions.update_one(
@@ -824,10 +845,10 @@ async def get_payment_status(session_id: str, request: Request):
                 )
     
     return {
-        "status": status.status,
-        "payment_status": status.payment_status,
-        "amount_total": status.amount_total,
-        "currency": status.currency
+        "status": session.status,
+        "payment_status": payment_status,
+        "amount_total": session.amount_total,
+        "currency": session.currency
     }
 
 @api_router.get("/user/courses")
