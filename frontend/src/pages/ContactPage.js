@@ -182,7 +182,7 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h3 className="font-semibold mb-1">Lokacija</h3>
-                    <p className="text-white/60">Bosna i Hercegovina</p>
+                    <p className="text-white/60">Srbija</p>
                   </div>
                 </div>
               </div>
