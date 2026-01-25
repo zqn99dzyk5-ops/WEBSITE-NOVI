@@ -138,7 +138,6 @@ export default function LoginPage() {
         {/* Admin hint */}
         <div className="mt-4 text-center">
           <p className="text-white/30 text-sm">
-            Admin: admin@serbiana.com / admin123
           </p>
         </div>
       </motion.div>
