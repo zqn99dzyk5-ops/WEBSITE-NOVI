@@ -36,11 +36,6 @@ services:
       - STRIPE_API_KEY=${STRIPE_API_KEY:-sk_test_emergent}
     networks:
       - continental-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/api/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   # React Frontend with Nginx
   frontend:
