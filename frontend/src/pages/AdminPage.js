@@ -180,7 +180,7 @@ export default function AdminPage() {
         user_id: selectedUserForAssign.id,
         course_id: selectedCourseToAssign
       }, { headers });
-      toast.success('Kurs dodijeljen!');
+      toast.success('Kurs dodijeljen');
       setSelectedCourseToAssign('');
       const res = await axios.get(`${API}/admin/user-courses/${selectedUserForAssign.id}`, { headers });
       setUserAssignedCourses(res.data);
