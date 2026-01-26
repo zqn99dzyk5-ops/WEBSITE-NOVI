@@ -16,6 +16,7 @@ jobs:
           key: ${{ secrets.VPS_KEY }}
           script: |
             cd /docker/website-novi
-            git pull origin main
-            docker-compose down
-            docker-compose up -d --build
+            git config --global credential.helper store
+            git pull origin main || git reset --hard origin/main
+            docker compose down
+            docker compose up -d --build
