@@ -88,7 +88,7 @@ export default function HomePage() {
   const whyUsPoints = settings?.why_us_points || [
     'Provjerene metode zarade',
     'Podrška 24/7',
-    'Zajednica od 1500+ članova',
+    'Zajednica od 800+ članova',
     'Praktični kursevi sa primjerima'
   ];
 
