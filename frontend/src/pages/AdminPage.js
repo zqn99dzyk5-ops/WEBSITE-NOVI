@@ -20,7 +20,9 @@ import {
   ShoppingBag,
   Video,
   GraduationCap,
-  Package
+  Package,
+  CalendarX,
+  RefreshCw
 } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
@@ -43,6 +45,12 @@ export default function AdminPage() {
   const [settings, setSettings] = useState(null);
   const [shopProducts, setShopProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // Subscriptions state
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [cancelEmail, setCancelEmail] = useState('');
+  const [cancelCourseId, setCancelCourseId] = useState('');
+  const [cancelling, setCancelling] = useState(false);
   
   // Lessons state
   const [selectedCourseForLessons, setSelectedCourseForLessons] = useState(null);
@@ -123,6 +131,56 @@ export default function AdminPage() {
     }
   };
 
+  // ============= SUBSCRIPTION HANDLERS =============
+  const fetchSubscriptions = async () => {
+    try {
+      const res = await axios.get(`${API}/admin/subscriptions`, { headers });
+      setSubscriptions(res.data);
+    } catch (error) {
+      console.error('Error fetching subscriptions:', error);
+      setSubscriptions([]);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    if (!cancelEmail || !cancelCourseId) {
+      toast.error('Unesite email i odaberite kurs');
+      return;
+    }
+    setCancelling(true);
+    try {
+      const res = await axios.post(`${API}/admin/cancel-subscription`, {
+        user_email: cancelEmail,
+        course_id: cancelCourseId
+      }, { headers });
+      toast.success(res.data.message);
+      setCancelEmail('');
+      setCancelCourseId('');
+      fetchSubscriptions();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Greška pri otkazivanju pretplate');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleQuickCancel = async (subscription) => {
+    if (!window.confirm(`Otkazati pretplatu za ${subscription.user?.email} - ${subscription.course?.title}?`)) return;
+    setCancelling(true);
+    try {
+      const res = await axios.post(`${API}/admin/cancel-subscription`, {
+        user_email: subscription.user_email,
+        course_id: subscription.course_id
+      }, { headers });
+      toast.success(res.data.message);
+      fetchSubscriptions();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Greška pri otkazivanju pretplate');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const handleSelectCourseForLessons = async (course) => {
     setSelectedCourseForLessons(course);
     await fetchLessons(course.id);
@@ -180,7 +238,7 @@ export default function AdminPage() {
         user_id: selectedUserForAssign.id,
         course_id: selectedCourseToAssign
       }, { headers });
-      toast.success('Kurs dodijeljen');
+      toast.success('Kurs dodijeljen!');
       setSelectedCourseToAssign('');
       const res = await axios.get(`${API}/admin/user-courses/${selectedUserForAssign.id}`, { headers });
       setUserAssignedCourses(res.data);
@@ -405,6 +463,7 @@ export default function AdminPage() {
           <TabsList className="bg-white/5 border border-white/10 p-1 rounded-xl flex flex-wrap gap-1">
             <TabsTrigger value="dashboard" className="data-[state=active]:bg-white/10 rounded-lg px-3 py-2 text-sm">Dashboard</TabsTrigger>
             <TabsTrigger value="users" className="data-[state=active]:bg-white/10 rounded-lg px-3 py-2 text-sm">Korisnici</TabsTrigger>
+            <TabsTrigger value="subscriptions" onClick={fetchSubscriptions} className="data-[state=active]:bg-white/10 rounded-lg px-3 py-2 text-sm">Pretplate</TabsTrigger>
             <TabsTrigger value="courses" className="data-[state=active]:bg-white/10 rounded-lg px-3 py-2 text-sm">Kursevi</TabsTrigger>
             <TabsTrigger value="lessons" className="data-[state=active]:bg-white/10 rounded-lg px-3 py-2 text-sm">Lekcije</TabsTrigger>
             <TabsTrigger value="faq" className="data-[state=active]:bg-white/10 rounded-lg px-3 py-2 text-sm">FAQ</TabsTrigger>
@@ -562,6 +621,115 @@ export default function AdminPage() {
             </div>
           </TabsContent>
 
+          {/* Subscriptions Tab */}
+          <TabsContent value="subscriptions" className="space-y-6">
+            {/* Cancel Subscription Form */}
+            <div className="glass-card rounded-xl p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <CalendarX size={20} className="text-red-400" />
+                Otkaži Pretplatu
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Input 
+                  placeholder="Email korisnika" 
+                  value={cancelEmail} 
+                  onChange={(e) => setCancelEmail(e.target.value)} 
+                  className="bg-white/5 border-white/10" 
+                />
+                <select
+                  value={cancelCourseId}
+                  onChange={(e) => setCancelCourseId(e.target.value)}
+                  className="h-10 px-3 rounded-md bg-white/5 border border-white/10 text-white"
+                >
+                  <option value="">-- Odaberi Kurs --</option>
+                  {courses.filter(c => !c.is_free).map(c => (
+                    <option key={c.id} value={c.id}>{c.title}</option>
+                  ))}
+                </select>
+                <Button 
+                  onClick={handleCancelSubscription} 
+                  disabled={cancelling || !cancelEmail || !cancelCourseId}
+                  className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30"
+                >
+                  {cancelling ? (
+                    <RefreshCw size={16} className="mr-2 animate-spin" />
+                  ) : (
+                    <CalendarX size={16} className="mr-2" />
+                  )}
+                  Otkaži Pretplatu
+                </Button>
+              </div>
+              <p className="text-xs text-white/40 mt-2">
+                Unesi email korisnika i odaberi kurs za koji želiš otkazati pretplatu
+              </p>
+            </div>
+
+            {/* Active Subscriptions List */}
+            <div className="glass-card rounded-xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <CreditCard size={20} className="text-[#FF4500]" />
+                  Aktivne Pretplate ({subscriptions.length})
+                </h3>
+                <Button onClick={fetchSubscriptions} variant="outline" size="sm" className="border-white/20">
+                  <RefreshCw size={14} className="mr-2" />
+                  Osvježi
+                </Button>
+              </div>
+              
+              {subscriptions.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-white/5">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Korisnik</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Kurs</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Cijena</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Datum</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Akcije</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {subscriptions.map((sub) => (
+                        <tr key={sub.id}>
+                          <td className="px-4 py-3">
+                            <p className="font-medium">{sub.user?.name || 'N/A'}</p>
+                            <p className="text-xs text-white/50">{sub.user_email}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="font-medium">{sub.course?.title || 'N/A'}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-[#FF4500] font-semibold">€{sub.amount}/mj</span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-white/50">
+                            {new Date(sub.activated_at || sub.created_at).toLocaleDateString('bs')}
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => handleQuickCancel(sub)}
+                              disabled={cancelling}
+                              className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"
+                              title="Otkaži pretplatu"
+                            >
+                              <CalendarX size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <CreditCard size={48} className="mx-auto mb-4 text-white/20" />
+                  <p className="text-white/50">Nema aktivnih pretplata</p>
+                  <p className="text-xs text-white/30 mt-1">Kliknite "Osvježi" za učitavanje</p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
           {/* Courses Tab */}
           <TabsContent value="courses" className="space-y-6">
             <div className="glass-card rounded-xl p-6">
@@ -570,7 +738,10 @@ export default function AdminPage() {
                 <Input placeholder="Naslov" value={newCourse.title} onChange={(e) => setNewCourse({ ...newCourse, title: e.target.value })} className="bg-white/5 border-white/10" />
                 <Input placeholder="Thumbnail URL" value={newCourse.thumbnail} onChange={(e) => setNewCourse({ ...newCourse, thumbnail: e.target.value })} className="bg-white/5 border-white/10" />
                 <Input placeholder="Mux Video ID (za preview)" value={newCourse.mux_video_id} onChange={(e) => setNewCourse({ ...newCourse, mux_video_id: e.target.value })} className="bg-white/5 border-white/10" />
-                <Input type="number" placeholder="Cijena" value={newCourse.price} onChange={(e) => setNewCourse({ ...newCourse, price: parseFloat(e.target.value) || 0 })} className="bg-white/5 border-white/10" />
+                <div>
+                  <Input type="number" placeholder="Mjesečna cijena (€)" value={newCourse.price} onChange={(e) => setNewCourse({ ...newCourse, price: parseFloat(e.target.value) || 0 })} className="bg-white/5 border-white/10" />
+                  <p className="text-xs text-white/40 mt-1">Cijena mjesečne pretplate u EUR</p>
+                </div>
                 <Input placeholder="Opis" value={newCourse.description} onChange={(e) => setNewCourse({ ...newCourse, description: e.target.value })} className="bg-white/5 border-white/10 md:col-span-2" />
                 <div className="flex items-center gap-4">
                   <select value={newCourse.course_type} onChange={(e) => setNewCourse({ ...newCourse, course_type: e.target.value })} className="h-10 px-3 rounded-md bg-white/5 border border-white/10 text-white">
@@ -622,7 +793,10 @@ export default function AdminPage() {
                           <h4 className="font-semibold truncate">{course.title}</h4>
                           {course.course_type === 'bundle' && <span className="px-2 py-0.5 rounded text-xs bg-purple-500/20 text-purple-400">Bundle</span>}
                         </div>
-                        <p className="text-sm text-white/50">€{course.price} {course.is_free && '(Besplatno)'}</p>
+                        <p className="text-sm text-white/50">
+                          {course.is_free ? 'Besplatno' : `€${course.price}/mj`}
+                          {course.stripe_price_id && <span className="ml-2 text-green-400 text-xs">● Stripe aktivno</span>}
+                        </p>
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => setEditingCourse(course.id)} className="p-2 rounded-lg bg-white/5 hover:bg-white/10"><Edit2 size={16} /></button>
