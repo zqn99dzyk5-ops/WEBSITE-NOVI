@@ -156,7 +156,7 @@ export default function CoursesPage() {
                     </p>
                     <div className="flex items-center justify-between">
                       <span className="text-2xl font-bold gradient-text">
-                        {course.is_free ? 'Besplatno' : `€${course.price}`}
+                        {course.is_free ? 'Besplatno' : `€${course.price}/mj`}
                       </span>
                       <span className="text-white/40 text-sm flex items-center gap-1">
                         <BookOpen size={16} />
