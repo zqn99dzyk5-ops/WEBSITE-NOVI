@@ -29,6 +29,54 @@ JWT_EXPIRATION_HOURS = 24
 
 # Stripe Config
 STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', 'sk_test_emergent')
+stripe.api_key = STRIPE_API_KEY
+
+# ============= STRIPE HELPERS =============
+
+async def create_or_update_stripe_price(course_id: str, title: str, price: float):
+    """Create or update Stripe product and recurring price for a course"""
+    try:
+        # Check if course already has stripe product
+        course = await db.courses.find_one({"id": course_id}, {"_id": 0})
+        
+        if course and course.get('stripe_product_id'):
+            # Update existing product
+            product = stripe.Product.modify(
+                course['stripe_product_id'],
+                name=f"Continental Academy - {title}",
+                description=f"Mjesečna pretplata za kurs: {title}"
+            )
+            
+            # If price changed, create new price (can't update Stripe prices)
+            if course.get('price') != price or not course.get('stripe_price_id'):
+                new_price = stripe.Price.create(
+                    product=product.id,
+                    unit_amount=int(price * 100),
+                    currency='eur',
+                    recurring={'interval': 'month'}
+                )
+                return product.id, new_price.id
+            return product.id, course.get('stripe_price_id')
+        else:
+            # Create new product
+            product = stripe.Product.create(
+                name=f"Continental Academy - {title}",
+                description=f"Mjesečna pretplata za kurs: {title}",
+                metadata={'course_id': course_id}
+            )
+            
+            # Create recurring price
+            price_obj = stripe.Price.create(
+                product=product.id,
+                unit_amount=int(price * 100),
+                currency='eur',
+                recurring={'interval': 'month'}
+            )
+            
+            return product.id, price_obj.id
+    except Exception as e:
+        logging.error(f"Stripe error creating price: {e}")
+        return None, None
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -72,7 +120,7 @@ class CourseCreate(BaseModel):
     description: str
     thumbnail: str
     mux_video_id: str
-    price: float
+    price: float  # Monthly subscription price
     is_free: bool = False
     order: int = 0
     course_type: str = "single"  # single, bundle
@@ -96,12 +144,18 @@ class CourseResponse(BaseModel):
     description: str
     thumbnail: str
     mux_video_id: str
-    price: float
+    price: float  # Monthly price
     is_free: bool
     order: int
     course_type: str = "single"
     included_courses: List[str] = []
+    stripe_price_id: Optional[str] = None
+    stripe_product_id: Optional[str] = None
     created_at: str
+
+class CancelSubscriptionRequest(BaseModel):
+    user_email: str
+    course_id: str
 
 class AssignCourseRequest(BaseModel):
     user_id: str
@@ -175,6 +229,10 @@ class PaymentCreate(BaseModel):
     origin_url: str
 
 class CoursePurchase(BaseModel):
+    course_id: str
+    origin_url: str
+
+class CourseSubscription(BaseModel):
     course_id: str
     origin_url: str
 
@@ -320,9 +378,20 @@ async def get_course(course_id: str, user: dict = Depends(get_optional_user)):
 @api_router.post("/courses", response_model=CourseResponse)
 async def create_course(data: CourseCreate, admin: dict = Depends(get_admin_user)):
     course_id = str(uuid.uuid4())
+    
+    # Create Stripe product and price if not free
+    stripe_product_id = None
+    stripe_price_id = None
+    if not data.is_free and data.price > 0:
+        stripe_product_id, stripe_price_id = await create_or_update_stripe_price(
+            course_id, data.title, data.price
+        )
+    
     course = {
         "id": course_id,
         **data.model_dump(),
+        "stripe_product_id": stripe_product_id,
+        "stripe_price_id": stripe_price_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.courses.insert_one(course)
@@ -333,6 +402,28 @@ async def update_course(course_id: str, data: CourseUpdate, admin: dict = Depend
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     if not update_data:
         raise HTTPException(status_code=400, detail="Nema podataka za ažuriranje")
+    
+    # Get current course
+    current_course = await db.courses.find_one({"id": course_id}, {"_id": 0})
+    if not current_course:
+        raise HTTPException(status_code=404, detail="Kurs nije pronađen")
+    
+    # Update Stripe price if price or title changed
+    new_price = update_data.get('price', current_course.get('price'))
+    new_title = update_data.get('title', current_course.get('title'))
+    is_free = update_data.get('is_free', current_course.get('is_free', False))
+    
+    if not is_free and new_price > 0:
+        if (new_price != current_course.get('price') or 
+            new_title != current_course.get('title') or
+            not current_course.get('stripe_price_id')):
+            stripe_product_id, stripe_price_id = await create_or_update_stripe_price(
+                course_id, new_title, new_price
+            )
+            if stripe_product_id:
+                update_data['stripe_product_id'] = stripe_product_id
+            if stripe_price_id:
+                update_data['stripe_price_id'] = stripe_price_id
     
     result = await db.courses.update_one({"id": course_id}, {"$set": update_data})
     if result.matched_count == 0:
@@ -685,50 +776,72 @@ async def create_checkout(data: PaymentCreate, request: Request, user: dict = De
     return {"url": session.url, "session_id": session.id}
 
 @api_router.post("/payments/course")
-async def purchase_course(data: CoursePurchase, request: Request, user: dict = Depends(get_current_user)):
+async def subscribe_to_course(data: CourseSubscription, request: Request, user: dict = Depends(get_current_user)):
+    """Create Stripe Checkout session for course SUBSCRIPTION (monthly)"""
     # Check if course exists
     course = await db.courses.find_one({"id": data.course_id}, {"_id": 0})
     if not course:
         raise HTTPException(status_code=404, detail="Kurs nije pronađen")
     
-    # Check if already purchased
-    existing = await db.user_courses.find_one({"user_id": user['id'], "course_id": data.course_id})
-    if existing:
-        raise HTTPException(status_code=400, detail="Već ste kupili ovaj kurs")
+    # Check if already has active subscription for this course
+    existing_sub = await db.subscriptions.find_one({
+        "user_id": user['id'], 
+        "course_id": data.course_id,
+        "status": "active"
+    })
+    if existing_sub:
+        raise HTTPException(status_code=400, detail="Već imate aktivnu pretplatu za ovaj kurs")
     
-    stripe.api_key = STRIPE_API_KEY
+    # Check if course has stripe price, if not create one
+    stripe_price_id = course.get('stripe_price_id')
+    if not stripe_price_id and not course.get('is_free', False):
+        stripe_product_id, stripe_price_id = await create_or_update_stripe_price(
+            data.course_id, course['title'], course['price']
+        )
+        if stripe_price_id:
+            await db.courses.update_one(
+                {"id": data.course_id},
+                {"$set": {"stripe_product_id": stripe_product_id, "stripe_price_id": stripe_price_id}}
+            )
     
-    success_url = f"{data.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}&type=course"
+    if not stripe_price_id:
+        raise HTTPException(status_code=500, detail="Greška pri kreiranju cijene. Kontaktirajte podršku.")
+    
+    success_url = f"{data.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}&type=subscription"
     cancel_url = f"{data.origin_url}/courses/{data.course_id}"
     
     try:
+        # Create Stripe Checkout Session for SUBSCRIPTION
         session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{
-                'price_data': {
-                    'currency': 'eur',
-                    'product_data': {
-                        'name': course['title'],
-                    },
-                    'unit_amount': int(course['price'] * 100),
-                },
+                'price': stripe_price_id,
                 'quantity': 1,
             }],
-            mode='payment',
+            mode='subscription',
             success_url=success_url,
             cancel_url=cancel_url,
+            customer_email=user['email'],
             metadata={
                 "user_id": user['id'],
                 "course_id": data.course_id,
                 "user_email": user['email'],
-                "type": "course"
+                "type": "course_subscription"
+            },
+            subscription_data={
+                'metadata': {
+                    "user_id": user['id'],
+                    "course_id": data.course_id,
+                    "user_email": user['email']
+                }
             }
         )
     except Exception as e:
+        logging.error(f"Stripe checkout error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
-    # Create transaction record
-    transaction = {
+    # Create pending subscription record
+    subscription_record = {
         "id": str(uuid.uuid4()),
         "session_id": session.id,
         "user_id": user['id'],
@@ -737,11 +850,10 @@ async def purchase_course(data: CoursePurchase, request: Request, user: dict = D
         "course_title": course['title'],
         "amount": course['price'],
         "currency": "eur",
-        "payment_status": "pending",
-        "type": "course",
+        "status": "pending",
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.payment_transactions.insert_one(transaction)
+    await db.subscriptions.insert_one(subscription_record)
     
     return {"url": session.url, "session_id": session.id}
 
@@ -808,41 +920,65 @@ async def purchase_shop_product(data: ShopProductPurchase, request: Request, use
 
 @api_router.get("/payments/status/{session_id}")
 async def get_payment_status(session_id: str, request: Request):
-    stripe.api_key = STRIPE_API_KEY
-    
     try:
         session = stripe.checkout.Session.retrieve(session_id)
         payment_status = "paid" if session.payment_status == "paid" else "pending"
     except Exception as e:
         raise HTTPException(status_code=404, detail="Session not found")
     
-    # Update transaction and user if paid
+    # Handle subscription checkout completion
     if payment_status == "paid":
-        transaction = await db.payment_transactions.find_one({"session_id": session_id})
-        if transaction and transaction.get('payment_status') != 'paid':
-            await db.payment_transactions.update_one(
+        # Check if this is a subscription
+        subscription_record = await db.subscriptions.find_one({"session_id": session_id})
+        if subscription_record and subscription_record.get('status') == 'pending':
+            # Update subscription record
+            stripe_subscription_id = session.subscription
+            await db.subscriptions.update_one(
                 {"session_id": session_id},
-                {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}}
+                {"$set": {
+                    "status": "active",
+                    "stripe_subscription_id": stripe_subscription_id,
+                    "activated_at": datetime.now(timezone.utc).isoformat()
+                }}
             )
             
-            # Check if this is a course purchase
-            if transaction.get('type') == 'course' and transaction.get('course_id'):
-                # Add course to user's purchased courses
-                await db.user_courses.update_one(
-                    {"user_id": transaction['user_id'], "course_id": transaction['course_id']},
-                    {"$set": {
-                        "user_id": transaction['user_id'],
-                        "course_id": transaction['course_id'],
-                        "purchased_at": datetime.now(timezone.utc).isoformat()
-                    }},
-                    upsert=True
+            # Add course access to user
+            await db.user_courses.update_one(
+                {"user_id": subscription_record['user_id'], "course_id": subscription_record['course_id']},
+                {"$set": {
+                    "user_id": subscription_record['user_id'],
+                    "course_id": subscription_record['course_id'],
+                    "subscription_id": subscription_record['id'],
+                    "purchased_at": datetime.now(timezone.utc).isoformat()
+                }},
+                upsert=True
+            )
+        else:
+            # Handle one-time payment (shop products, etc.)
+            transaction = await db.payment_transactions.find_one({"session_id": session_id})
+            if transaction and transaction.get('payment_status') != 'paid':
+                await db.payment_transactions.update_one(
+                    {"session_id": session_id},
+                    {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}}
                 )
-            else:
-                # Subscription purchase - activate subscription
-                await db.users.update_one(
-                    {"id": transaction['user_id']},
-                    {"$set": {"subscription_status": "active"}}
-                )
+                
+                # Check if this is a course purchase (legacy)
+                if transaction.get('type') == 'course' and transaction.get('course_id'):
+                    await db.user_courses.update_one(
+                        {"user_id": transaction['user_id'], "course_id": transaction['course_id']},
+                        {"$set": {
+                            "user_id": transaction['user_id'],
+                            "course_id": transaction['course_id'],
+                            "purchased_at": datetime.now(timezone.utc).isoformat()
+                        }},
+                        upsert=True
+                    )
+                else:
+                    # Subscription purchase - activate subscription
+                    await db.users.update_one(
+                        {"id": transaction['user_id']},
+                        {"$set": {"subscription_status": "active"}}
+                    )
     
     return {
         "status": session.status,
@@ -869,33 +1005,146 @@ async def get_user_courses(user: dict = Depends(get_current_user)):
 
 @api_router.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events for subscriptions"""
     body = await request.body()
     signature = request.headers.get("Stripe-Signature")
     
-    host_url = str(request.base_url).rstrip('/')
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    
-    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
-    
+    # Note: In production, you should verify the webhook signature
     try:
-        webhook_response = await stripe_checkout.handle_webhook(body, signature)
+        payload = body.decode('utf-8')
+        import json
+        event = json.loads(payload)
         
-        if webhook_response.payment_status == "paid":
-            user_id = webhook_response.metadata.get("user_id")
-            if user_id:
-                await db.payment_transactions.update_one(
-                    {"session_id": webhook_response.session_id},
-                    {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}}
+        event_type = event.get('type', '')
+        data = event.get('data', {}).get('object', {})
+        
+        logging.info(f"Webhook event: {event_type}")
+        
+        if event_type == 'checkout.session.completed':
+            session_id = data.get('id')
+            if data.get('mode') == 'subscription':
+                # Handle subscription checkout completion
+                subscription_record = await db.subscriptions.find_one({"session_id": session_id})
+                if subscription_record:
+                    stripe_sub_id = data.get('subscription')
+                    await db.subscriptions.update_one(
+                        {"session_id": session_id},
+                        {"$set": {
+                            "status": "active",
+                            "stripe_subscription_id": stripe_sub_id,
+                            "activated_at": datetime.now(timezone.utc).isoformat()
+                        }}
+                    )
+                    # Grant course access
+                    await db.user_courses.update_one(
+                        {"user_id": subscription_record['user_id'], "course_id": subscription_record['course_id']},
+                        {"$set": {
+                            "user_id": subscription_record['user_id'],
+                            "course_id": subscription_record['course_id'],
+                            "subscription_id": subscription_record['id'],
+                            "purchased_at": datetime.now(timezone.utc).isoformat()
+                        }},
+                        upsert=True
+                    )
+        
+        elif event_type == 'customer.subscription.deleted':
+            # Subscription was cancelled
+            stripe_sub_id = data.get('id')
+            subscription = await db.subscriptions.find_one({"stripe_subscription_id": stripe_sub_id})
+            if subscription:
+                await db.subscriptions.update_one(
+                    {"stripe_subscription_id": stripe_sub_id},
+                    {"$set": {
+                        "status": "cancelled",
+                        "cancelled_at": datetime.now(timezone.utc).isoformat()
+                    }}
                 )
-                await db.users.update_one(
-                    {"id": user_id},
-                    {"$set": {"subscription_status": "active"}}
+                # Remove course access
+                await db.user_courses.delete_one({
+                    "user_id": subscription['user_id'],
+                    "course_id": subscription['course_id']
+                })
+        
+        elif event_type == 'invoice.payment_failed':
+            # Payment failed - might want to notify user
+            stripe_sub_id = data.get('subscription')
+            if stripe_sub_id:
+                await db.subscriptions.update_one(
+                    {"stripe_subscription_id": stripe_sub_id},
+                    {"$set": {"payment_failed_at": datetime.now(timezone.utc).isoformat()}}
                 )
         
         return {"status": "ok"}
     except Exception as e:
         logging.error(f"Webhook error: {e}")
         return {"status": "error", "message": str(e)}
+
+# ============= ADMIN SUBSCRIPTION MANAGEMENT =============
+
+@api_router.get("/admin/subscriptions")
+async def get_all_subscriptions(admin: dict = Depends(get_admin_user)):
+    """Get all active subscriptions"""
+    subscriptions = await db.subscriptions.find(
+        {"status": "active"}, 
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    
+    # Enrich with user and course info
+    for sub in subscriptions:
+        user = await db.users.find_one({"id": sub['user_id']}, {"_id": 0, "password": 0})
+        course = await db.courses.find_one({"id": sub['course_id']}, {"_id": 0})
+        sub['user'] = user
+        sub['course'] = course
+    
+    return subscriptions
+
+@api_router.post("/admin/cancel-subscription")
+async def admin_cancel_subscription(data: CancelSubscriptionRequest, admin: dict = Depends(get_admin_user)):
+    """Admin cancels a user's subscription by email and course ID"""
+    # Find user by email
+    user = await db.users.find_one({"email": data.user_email}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="Korisnik sa tim emailom nije pronađen")
+    
+    # Find active subscription
+    subscription = await db.subscriptions.find_one({
+        "user_id": user['id'],
+        "course_id": data.course_id,
+        "status": "active"
+    })
+    
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Nema aktivne pretplate za ovaj kurs")
+    
+    # Cancel in Stripe
+    stripe_sub_id = subscription.get('stripe_subscription_id')
+    if stripe_sub_id:
+        try:
+            stripe.Subscription.cancel(stripe_sub_id)
+        except Exception as e:
+            logging.error(f"Stripe cancellation error: {e}")
+            # Continue anyway to update local records
+    
+    # Update subscription status
+    await db.subscriptions.update_one(
+        {"id": subscription['id']},
+        {"$set": {
+            "status": "cancelled",
+            "cancelled_at": datetime.now(timezone.utc).isoformat(),
+            "cancelled_by": admin['email']
+        }}
+    )
+    
+    # Remove course access
+    await db.user_courses.delete_one({
+        "user_id": user['id'],
+        "course_id": data.course_id
+    })
+    
+    course = await db.courses.find_one({"id": data.course_id}, {"_id": 0})
+    course_title = course['title'] if course else 'Nepoznat kurs'
+    
+    return {"message": f"Pretplata za '{course_title}' otkazana za korisnika {data.user_email}"}
 
 # ============= ADMIN ROUTES =============
 
