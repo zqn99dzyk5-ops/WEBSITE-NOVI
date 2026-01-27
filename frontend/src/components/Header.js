@@ -3,6 +3,10 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Menu, X, User, LogOut, LayoutDashboard, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
 
 export const Header = () => {
   const { user, logout } = useAuth();
@@ -11,6 +15,19 @@ export const Header = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [settings, setSettings] = useState(null);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await axios.get(`${API}/settings`);
+        setSettings(res.data);
+      } catch (e) {
+        console.error('Error fetching settings:', e);
+      }
+    };
+    fetchSettings();
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -64,13 +81,23 @@ export const Header = () => {
             className="flex items-center gap-3 group"
             data-testid="logo-link"
           >
-            <div className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center font-bold text-white text-lg">
-              C
-            </div>
-            <span className="font-bold text-xl tracking-tight hidden sm:block">
-              <span className="gradient-text">Continental</span>
-              <span className="text-white/80 font-normal ml-1">Academy</span>
-            </span>
+            {settings?.logo_url ? (
+              <img 
+                src={settings.logo_url} 
+                alt={settings?.site_name || 'Continental Academy'} 
+                className="h-10 w-auto object-contain"
+              />
+            ) : (
+              <>
+                <div className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center font-bold text-white text-lg">
+                  C
+                </div>
+                <span className="font-bold text-xl tracking-tight hidden sm:block">
+                  <span className="gradient-text">{settings?.site_name?.split(' ')[0] || 'Continental'}</span>
+                  <span className="text-white/80 font-normal ml-1">{settings?.site_name?.split(' ').slice(1).join(' ') || 'Academy'}</span>
+                </span>
+              </>
+            )}
           </Link>
 
           {/* Desktop Navigation */}
