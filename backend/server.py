@@ -186,6 +186,8 @@ class ResultResponse(BaseModel):
     order: int
 
 class SiteSettings(BaseModel):
+    logo_url: str = ""
+    site_name: str = "Continental Academy"
     hero_title: str = "Zaradi Sa Nama"
     hero_subtitle: str = "Nauči vještine koje će promijeniti tvoj život"
     hero_image: str = "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=1920"
