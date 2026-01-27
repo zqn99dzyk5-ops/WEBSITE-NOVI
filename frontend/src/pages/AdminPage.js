@@ -91,6 +91,13 @@ export default function AdminPage() {
     fetchAllData();
   }, [user, token, navigate, authLoading]);
 
+  // Auto-fetch subscriptions when tab changes to subscriptions
+  useEffect(() => {
+    if (activeTab === 'subscriptions' && token) {
+      fetchSubscriptions();
+    }
+  }, [activeTab, token]);
+
   const fetchAllData = async () => {
     setLoading(true);
     try {
@@ -1075,6 +1082,26 @@ export default function AdminPage() {
           <TabsContent value="settings" className="space-y-6">
             {settings && (
               <>
+                <div className="glass-card rounded-xl p-6">
+                  <h3 className="font-semibold mb-4">Logo & Ime Sajta</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm text-white/70 mb-2">Ime Sajta</label>
+                      <Input value={settings.site_name || ''} onChange={(e) => setSettings({ ...settings, site_name: e.target.value })} className="bg-white/5 border-white/10" placeholder="Continental Academy" />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-white/70 mb-2">Logo URL (slika)</label>
+                      <Input value={settings.logo_url || ''} onChange={(e) => setSettings({ ...settings, logo_url: e.target.value })} className="bg-white/5 border-white/10" placeholder="https://example.com/logo.png" />
+                      {settings.logo_url && (
+                        <div className="mt-2 p-4 rounded-lg bg-white/5 inline-block">
+                          <img src={settings.logo_url} alt="Logo preview" className="h-12 w-auto object-contain" />
+                        </div>
+                      )}
+                      <p className="text-xs text-white/40 mt-1">Ostavi prazno za default tekst logo</p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="glass-card rounded-xl p-6">
                   <h3 className="font-semibold mb-4">Hero Sekcija</h3>
                   <div className="space-y-4">
