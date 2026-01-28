@@ -30,9 +30,9 @@ services:
         condition: service_healthy
     environment:
       - MONGO_URL=${MONGO_URL}
-      - DB_NAME=continental_academy
+      - DB_NAME=${DB_NAME:-continental_academy}
       - JWT_SECRET=${JWT_SECRET:-continental-academy-secret-key-2024-production}
-      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - CORS_ORIGINS=https://continentalacademy.co,https://www.continentalacademy.co
       - STRIPE_API_KEY=${STRIPE_API_KEY:-sk_test_emergent}
     networks:
       - continental-network
@@ -43,13 +43,16 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
       args:
-        - REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL:-http://localhost}
+        - REACT_APP_BACKEND_URL=https://continentalacademy.co
     container_name: continental-frontend
     restart: unless-stopped
     depends_on:
       - backend
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     networks:
       - continental-network
 
