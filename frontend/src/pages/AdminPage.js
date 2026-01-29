@@ -22,7 +22,10 @@ import {
   GraduationCap,
   Package,
   CalendarX,
-  RefreshCw
+  RefreshCw,
+  Share2,
+  DollarSign,
+  Percent
 } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
@@ -51,6 +54,11 @@ export default function AdminPage() {
   const [cancelEmail, setCancelEmail] = useState('');
   const [cancelCourseId, setCancelCourseId] = useState('');
   const [cancelling, setCancelling] = useState(false);
+  
+  // Affiliate state
+  const [affiliates, setAffiliates] = useState([]);
+  const [affiliatePayouts, setAffiliatePayouts] = useState([]);
+  const [newCommissionPercent, setNewCommissionPercent] = useState('');
   
   // Lessons state
   const [selectedCourseForLessons, setSelectedCourseForLessons] = useState(null);
@@ -95,6 +103,10 @@ export default function AdminPage() {
   useEffect(() => {
     if (activeTab === 'subscriptions' && token) {
       fetchSubscriptions();
+    }
+    if (activeTab === 'affiliates' && token) {
+      fetchAffiliates();
+      fetchAffiliatePayouts();
     }
   }, [activeTab, token]);
 
@@ -185,6 +197,64 @@ export default function AdminPage() {
       toast.error(error.response?.data?.detail || 'Greška pri otkazivanju pretplate');
     } finally {
       setCancelling(false);
+    }
+  };
+
+  // ============= AFFILIATE HANDLERS =============
+  const fetchAffiliates = async () => {
+    try {
+      const res = await axios.get(`${API}/admin/affiliates`, { headers });
+      setAffiliates(res.data);
+    } catch (error) {
+      console.error('Error fetching affiliates:', error);
+    }
+  };
+
+  const fetchAffiliatePayouts = async () => {
+    try {
+      const res = await axios.get(`${API}/admin/affiliate-payouts`, { headers });
+      setAffiliatePayouts(res.data);
+    } catch (error) {
+      console.error('Error fetching payouts:', error);
+    }
+  };
+
+  const updateCommissionPercent = async () => {
+    const percent = parseFloat(newCommissionPercent);
+    if (isNaN(percent) || percent < 0 || percent > 100) {
+      toast.error('Procenat mora biti između 0 i 100');
+      return;
+    }
+    try {
+      await axios.put(`${API}/admin/affiliate-commission`, { commission_percent: percent }, { headers });
+      toast.success(`Provizija ažurirana na ${percent}%`);
+      setSettings(prev => ({ ...prev, affiliate_commission_percent: percent }));
+      setNewCommissionPercent('');
+    } catch (error) {
+      toast.error('Greška pri ažuriranju provizije');
+    }
+  };
+
+  const completePayout = async (payoutId) => {
+    if (!window.confirm('Označiti ovu isplatu kao završenu?')) return;
+    try {
+      const res = await axios.post(`${API}/admin/affiliate-payout/${payoutId}/complete`, {}, { headers });
+      toast.success(res.data.message);
+      fetchAffiliatePayouts();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Greška');
+    }
+  };
+
+  const rejectPayout = async (payoutId) => {
+    if (!window.confirm('Odbiti ovaj zahtjev? Sredstva će biti vraćena korisniku.')) return;
+    try {
+      const res = await axios.post(`${API}/admin/affiliate-payout/${payoutId}/reject`, {}, { headers });
+      toast.success(res.data.message);
+      fetchAffiliatePayouts();
+      fetchAffiliates();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Greška');
     }
   };
 
@@ -471,6 +541,7 @@ export default function AdminPage() {
             <TabsTrigger value="dashboard" className="data-[state=active]:bg-white/10 rounded-lg px-3 py-2 text-sm">Dashboard</TabsTrigger>
             <TabsTrigger value="users" className="data-[state=active]:bg-white/10 rounded-lg px-3 py-2 text-sm">Korisnici</TabsTrigger>
             <TabsTrigger value="subscriptions" onClick={fetchSubscriptions} className="data-[state=active]:bg-white/10 rounded-lg px-3 py-2 text-sm">Pretplate</TabsTrigger>
+            <TabsTrigger value="affiliates" className="data-[state=active]:bg-white/10 rounded-lg px-3 py-2 text-sm">Affiliates</TabsTrigger>
             <TabsTrigger value="courses" className="data-[state=active]:bg-white/10 rounded-lg px-3 py-2 text-sm">Kursevi</TabsTrigger>
             <TabsTrigger value="lessons" className="data-[state=active]:bg-white/10 rounded-lg px-3 py-2 text-sm">Lekcije</TabsTrigger>
             <TabsTrigger value="faq" className="data-[state=active]:bg-white/10 rounded-lg px-3 py-2 text-sm">FAQ</TabsTrigger>
@@ -732,6 +803,175 @@ export default function AdminPage() {
                   <CreditCard size={48} className="mx-auto mb-4 text-white/20" />
                   <p className="text-white/50">Nema aktivnih pretplata</p>
                   <p className="text-xs text-white/30 mt-1">Kliknite "Osvježi" za učitavanje</p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Affiliates Tab */}
+          <TabsContent value="affiliates" className="space-y-6">
+            {/* Commission Settings */}
+            <div className="glass-card rounded-xl p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Percent size={20} className="text-[#FF4500]" />
+                Podešavanje Provizije
+              </h3>
+              <div className="flex gap-4 items-end">
+                <div className="flex-1">
+                  <label className="block text-sm text-white/70 mb-2">Trenutna provizija: {settings?.affiliate_commission_percent || 25}%</label>
+                  <Input 
+                    type="number" 
+                    placeholder="Nova provizija (%)" 
+                    value={newCommissionPercent}
+                    onChange={(e) => setNewCommissionPercent(e.target.value)}
+                    className="bg-white/5 border-white/10"
+                    min="0"
+                    max="100"
+                  />
+                </div>
+                <Button onClick={updateCommissionPercent} className="gradient-bg">
+                  Ažuriraj za sve
+                </Button>
+              </div>
+              <p className="text-xs text-white/40 mt-2">
+                Ova provizija se primjenjuje na sve affiliate partnere. Affiliate dobija ovaj procenat od prve kupovine svakog korisnika kojeg preporuči.
+              </p>
+            </div>
+
+            {/* Active Affiliates */}
+            <div className="glass-card rounded-xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Share2 size={20} className="text-green-400" />
+                  Aktivni Affiliates ({affiliates.length})
+                </h3>
+                <Button onClick={fetchAffiliates} variant="outline" size="sm" className="border-white/20">
+                  <RefreshCw size={14} className="mr-2" />
+                  Osvježi
+                </Button>
+              </div>
+              
+              {affiliates.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-white/5">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Korisnik</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Kod</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Preporuke</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Zarađeno</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Za isplatu</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {affiliates.map((aff) => (
+                        <tr key={aff.id}>
+                          <td className="px-4 py-3">
+                            <p className="font-medium">{aff.name}</p>
+                            <p className="text-xs text-white/50">{aff.email}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <code className="px-2 py-1 rounded bg-white/10 text-xs">{aff.affiliate_code}</code>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-blue-400 font-semibold">{aff.total_referrals || 0}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-green-400 font-semibold">€{(aff.total_earned || 0).toFixed(2)}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-[#FF4500] font-semibold">€{(aff.affiliate_balance || 0).toFixed(2)}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Share2 size={48} className="mx-auto mb-4 text-white/20" />
+                  <p className="text-white/50">Nema aktivnih affiliates</p>
+                </div>
+              )}
+            </div>
+
+            {/* Payout Requests */}
+            <div className="glass-card rounded-xl p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <DollarSign size={20} className="text-yellow-400" />
+                Zahtjevi za Isplatu ({affiliatePayouts.filter(p => p.status === 'pending').length} na čekanju)
+              </h3>
+              
+              {affiliatePayouts.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-white/5">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Korisnik</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Iznos</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Metoda</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Detalji</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Datum</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Status</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-white/70">Akcije</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {affiliatePayouts.map((payout) => (
+                        <tr key={payout.id} className={payout.status === 'pending' ? 'bg-yellow-500/5' : ''}>
+                          <td className="px-4 py-3">
+                            <p className="font-medium">{payout.user_name || payout.user?.name || 'N/A'}</p>
+                            <p className="text-xs text-white/50">{payout.user_email || payout.user?.email}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-green-400 font-semibold">€{payout.amount}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="px-2 py-1 rounded text-xs bg-white/10 capitalize">{payout.payout_method}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <code className="text-xs bg-white/5 px-2 py-1 rounded">{payout.payout_details}</code>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-white/50">
+                            {new Date(payout.created_at).toLocaleDateString('bs')}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              payout.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                              payout.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                              'bg-red-500/20 text-red-400'
+                            }`}>
+                              {payout.status === 'pending' ? 'Na čekanju' : 
+                               payout.status === 'completed' ? 'Isplaćeno' : 'Odbijeno'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {payout.status === 'pending' && (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => completePayout(payout.id)}
+                                  className="px-3 py-1 rounded text-xs bg-green-500/20 hover:bg-green-500/30 text-green-400"
+                                >
+                                  Isplaćeno
+                                </button>
+                                <button
+                                  onClick={() => rejectPayout(payout.id)}
+                                  className="px-3 py-1 rounded text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400"
+                                >
+                                  Odbij
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <DollarSign size={32} className="mx-auto mb-2 text-white/20" />
+                  <p className="text-white/50 text-sm">Nema zahtjeva za isplatu</p>
                 </div>
               )}
             </div>
