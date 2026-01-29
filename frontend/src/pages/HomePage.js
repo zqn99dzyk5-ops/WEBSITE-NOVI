@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axios from 'axios';
 import MuxPlayer from '@mux/mux-player-react';
@@ -41,6 +41,21 @@ export default function HomePage() {
   const [faqs, setFaqs] = useState([]);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchParams] = useSearchParams();
+
+  // Track affiliate referral
+  useEffect(() => {
+    const refCode = searchParams.get('ref');
+    if (refCode) {
+      // Track the click and store affiliate info in localStorage
+      axios.post(`${API}/affiliate/track/${refCode}`)
+        .then(res => {
+          localStorage.setItem('affiliate_ref', res.data.affiliate_user_id);
+          localStorage.setItem('affiliate_ref_expires', Date.now() + (res.data.expires_days * 24 * 60 * 60 * 1000));
+        })
+        .catch(err => console.log('Affiliate tracking error:', err));
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -88,7 +103,7 @@ export default function HomePage() {
   const whyUsPoints = settings?.why_us_points || [
     'Provjerene metode zarade',
     'Podrška 24/7',
-    'Zajednica od 800+ članova',
+    'Zajednica od 1500+ članova',
     'Praktični kursevi sa primjerima'
   ];
 
