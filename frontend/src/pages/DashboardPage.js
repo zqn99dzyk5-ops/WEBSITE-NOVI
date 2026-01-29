@@ -14,8 +14,15 @@ import {
   ShoppingBag,
   Video,
   ChevronRight,
-  X
+  X,
+  Share2,
+  Copy,
+  DollarSign,
+  Users,
+  TrendingUp
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '../components/ui/button';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -29,6 +36,15 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [expandedCourse, setExpandedCourse] = useState(null);
+  
+  // Affiliate state
+  const [affiliateStats, setAffiliateStats] = useState(null);
+  const [showAffiliate, setShowAffiliate] = useState(false);
+  const [payoutAmount, setPayoutAmount] = useState('');
+  const [payingOut, setPayingOut] = useState(false);
+  const [payoutMethod, setPayoutMethod] = useState('');
+  const [payoutDetails, setPayoutDetails] = useState('');
+  const [savingPayout, setSavingPayout] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -38,14 +54,16 @@ export default function DashboardPage() {
 
     const fetchData = async () => {
       try {
-        const [allCoursesRes, purchasedRes, lessonsRes] = await Promise.all([
+        const [allCoursesRes, purchasedRes, lessonsRes, affiliateRes] = await Promise.all([
           axios.get(`${API}/courses`),
           axios.get(`${API}/user/courses`, { headers: { Authorization: `Bearer ${token}` } }),
-          axios.get(`${API}/user/lessons`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: [] }))
+          axios.get(`${API}/user/lessons`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: [] })),
+          axios.get(`${API}/affiliate/stats`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: null }))
         ]);
         setAllCourses(allCoursesRes.data);
         setPurchasedCourses(purchasedRes.data);
         setUserLessons(lessonsRes.data);
+        setAffiliateStats(affiliateRes.data);
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -54,6 +72,71 @@ export default function DashboardPage() {
     };
     fetchData();
   }, [user, token, navigate]);
+
+  const copyAffiliateLink = () => {
+    const link = `${window.location.origin}/?ref=${affiliateStats?.affiliate_code}`;
+    navigator.clipboard.writeText(link);
+    toast.success('Link kopiran!');
+  };
+
+  const savePayoutMethod = async () => {
+    if (!payoutMethod || !payoutDetails) {
+      toast.error('Odaberite metodu i unesite podatke');
+      return;
+    }
+    setSavingPayout(true);
+    try {
+      await axios.post(`${API}/affiliate/update-payout-method`, 
+        { payout_method: payoutMethod, payout_details: payoutDetails },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success('Podaci za isplatu sačuvani');
+      setAffiliateStats(prev => ({ 
+        ...prev, 
+        payout_method: payoutMethod, 
+        payout_details: payoutDetails 
+      }));
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Greška pri čuvanju');
+    } finally {
+      setSavingPayout(false);
+    }
+  };
+
+  const requestPayout = async () => {
+    const amount = parseFloat(payoutAmount);
+    if (!amount || amount <= 0) {
+      toast.error('Unesite validan iznos');
+      return;
+    }
+    if (amount < 50) {
+      toast.error('Minimalni iznos za isplatu je €50');
+      return;
+    }
+    if (amount > (affiliateStats?.affiliate_balance || 0)) {
+      toast.error('Nedovoljno sredstava');
+      return;
+    }
+    if (!affiliateStats?.payout_method) {
+      toast.error('Prvo unesite podatke za isplatu');
+      return;
+    }
+    
+    setPayingOut(true);
+    try {
+      const res = await axios.post(`${API}/affiliate/payout`, 
+        { amount },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success(res.data.message);
+      setAffiliateStats(prev => ({ ...prev, affiliate_balance: res.data.new_balance }));
+      setPayoutAmount('');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Greška pri zahtjevu');
+    } finally {
+      setPayingOut(false);
+    }
+  };
 
   if (!user) return null;
 
@@ -352,6 +435,169 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
+
+            {/* Affiliate Program */}
+            {affiliateStats && (
+              <div className="glass-card rounded-2xl p-6">
+                <button 
+                  onClick={() => setShowAffiliate(!showAffiliate)}
+                  className="w-full flex items-center justify-between"
+                >
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Share2 size={18} className="text-[#FF4500]" />
+                    Affiliate Program
+                  </h3>
+                  <ChevronRight size={18} className={`text-white/50 transition-transform ${showAffiliate ? 'rotate-90' : ''}`} />
+                </button>
+                
+                {showAffiliate && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="mt-4 space-y-4"
+                  >
+                    {/* Affiliate Link */}
+                    <div>
+                      <p className="text-xs text-white/40 mb-2">Tvoj affiliate link:</p>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          readOnly 
+                          value={`${window.location.origin}/?ref=${affiliateStats.affiliate_code}`}
+                          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs"
+                        />
+                        <button 
+                          onClick={copyAffiliateLink}
+                          className="p-2 rounded-lg bg-[#FF4500]/20 hover:bg-[#FF4500]/30 text-[#FF4500]"
+                        >
+                          <Copy size={16} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="text-center p-3 rounded-xl bg-white/5">
+                        <DollarSign size={20} className="mx-auto mb-1 text-green-400" />
+                        <p className="text-lg font-bold">€{(affiliateStats.affiliate_balance || 0).toFixed(2)}</p>
+                        <p className="text-[10px] text-white/40">Za isplatu</p>
+                      </div>
+                      <div className="text-center p-3 rounded-xl bg-white/5">
+                        <TrendingUp size={20} className="mx-auto mb-1 text-[#FF4500]" />
+                        <p className="text-lg font-bold">€{(affiliateStats.total_earned || 0).toFixed(2)}</p>
+                        <p className="text-[10px] text-white/40">Ukupno zarađeno</p>
+                      </div>
+                      <div className="text-center p-3 rounded-xl bg-white/5">
+                        <Users size={20} className="mx-auto mb-1 text-blue-400" />
+                        <p className="text-lg font-bold">{affiliateStats.total_referrals || 0}</p>
+                        <p className="text-[10px] text-white/40">Preporuka</p>
+                      </div>
+                      <div className="text-center p-3 rounded-xl bg-white/5">
+                        <Crown size={20} className="mx-auto mb-1 text-yellow-400" />
+                        <p className="text-lg font-bold">{affiliateStats.commission_percent}%</p>
+                        <p className="text-[10px] text-white/40">Provizija</p>
+                      </div>
+                    </div>
+
+                    {/* Payout Method Setup */}
+                    <div className="p-3 rounded-xl bg-white/5">
+                      <p className="text-xs text-white/50 mb-2">Podaci za isplatu:</p>
+                      {affiliateStats.payout_method ? (
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-sm font-medium capitalize">{affiliateStats.payout_method}</span>
+                            <p className="text-xs text-white/40">{affiliateStats.payout_details}</p>
+                          </div>
+                          <button 
+                            onClick={() => {
+                              setPayoutMethod(affiliateStats.payout_method);
+                              setPayoutDetails(affiliateStats.payout_details);
+                              setAffiliateStats(prev => ({ ...prev, payout_method: null }));
+                            }}
+                            className="text-xs text-[#FF4500] hover:underline"
+                          >
+                            Izmijeni
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <select 
+                            value={payoutMethod}
+                            onChange={(e) => setPayoutMethod(e.target.value)}
+                            className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm"
+                          >
+                            <option value="">Odaberi metodu...</option>
+                            <option value="paypal">PayPal</option>
+                            <option value="wise">Wise</option>
+                            <option value="iban">IBAN (Banka)</option>
+                          </select>
+                          <input 
+                            type="text"
+                            placeholder={payoutMethod === 'iban' ? 'BA39 1234 5678 9012 3456' : payoutMethod === 'paypal' ? 'email@paypal.com' : 'email@wise.com'}
+                            value={payoutDetails}
+                            onChange={(e) => setPayoutDetails(e.target.value)}
+                            className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm"
+                          />
+                          <Button 
+                            onClick={savePayoutMethod}
+                            disabled={savingPayout || !payoutMethod || !payoutDetails}
+                            size="sm"
+                            className="w-full bg-[#FF4500] hover:bg-[#FF4500]/80"
+                          >
+                            {savingPayout ? 'Čuvanje...' : 'Sačuvaj'}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Request Payout */}
+                    {affiliateStats.payout_method && affiliateStats.affiliate_balance >= 50 && (
+                      <div className="space-y-2">
+                        <p className="text-xs text-white/50">Zatraži isplatu (min. €50):</p>
+                        <div className="flex gap-2">
+                          <input 
+                            type="number"
+                            placeholder="Iznos €"
+                            value={payoutAmount}
+                            onChange={(e) => setPayoutAmount(e.target.value)}
+                            min="50"
+                            max={affiliateStats.affiliate_balance}
+                            className="flex-1 bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm"
+                          />
+                          <Button 
+                            onClick={requestPayout}
+                            disabled={payingOut || !payoutAmount || parseFloat(payoutAmount) < 50}
+                            className="bg-green-500 hover:bg-green-600"
+                          >
+                            {payingOut ? '...' : 'Zatraži'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {affiliateStats.affiliate_balance > 0 && affiliateStats.affiliate_balance < 50 && (
+                      <p className="text-xs text-yellow-400/80 text-center">
+                        Potrebno još €{(50 - affiliateStats.affiliate_balance).toFixed(2)} za minimalnu isplatu
+                      </p>
+                    )}
+
+                    {/* Pending Payouts */}
+                    {affiliateStats.pending_payouts?.length > 0 && (
+                      <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
+                        <p className="text-xs text-yellow-400 font-medium">Zahtjev na čekanju:</p>
+                        {affiliateStats.pending_payouts.map(p => (
+                          <p key={p.id} className="text-sm text-yellow-300">€{p.amount} - {new Date(p.created_at).toLocaleDateString('bs')}</p>
+                        ))}
+                      </div>
+                    )}
+
+                    <p className="text-[10px] text-white/30 text-center">
+                      Zarađuješ {affiliateStats.commission_percent}% od prve kupovine svakog korisnika kojeg preporučiš
+                    </p>
+                  </motion.div>
+                )}
+              </div>
+            )}
 
             {/* Help */}
             <div className="glass-card rounded-2xl p-6">
