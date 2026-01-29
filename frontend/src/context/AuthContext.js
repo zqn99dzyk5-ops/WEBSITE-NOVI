@@ -65,6 +65,23 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('token', newToken);
     setToken(newToken);
     setUser(userData);
+    
+    // Check if user was referred by someone and set referrer
+    const affiliateRef = localStorage.getItem('affiliate_ref');
+    const affiliateExpires = localStorage.getItem('affiliate_ref_expires');
+    if (affiliateRef && affiliateExpires && Date.now() < parseInt(affiliateExpires)) {
+      try {
+        await axios.post(`${API}/affiliate/set-referrer?affiliate_user_id=${affiliateRef}`, {}, {
+          headers: { Authorization: `Bearer ${newToken}` }
+        });
+        // Clear the affiliate cookie after setting
+        localStorage.removeItem('affiliate_ref');
+        localStorage.removeItem('affiliate_ref_expires');
+      } catch (err) {
+        console.log('Failed to set referrer:', err);
+      }
+    }
+    
     return userData;
   };
 
