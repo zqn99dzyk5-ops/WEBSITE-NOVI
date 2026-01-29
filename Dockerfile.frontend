@@ -10,7 +10,7 @@ RUN yarn install
 COPY frontend/ .
 
 # HARDKODIRANO - tvoj IP
-ENV REACT_APP_BACKEND_URL=http://76.13.6.233
+ENV REACT_APP_BACKEND_URL=https://continentalacademy.co
 
 RUN yarn build
 
