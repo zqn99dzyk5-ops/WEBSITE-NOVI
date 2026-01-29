@@ -100,6 +100,12 @@ class UserResponse(BaseModel):
     name: str
     role: str
     subscription_status: str
+    affiliate_code: Optional[str] = None
+    affiliate_balance: Optional[float] = 0.0
+    total_earned: Optional[float] = 0.0
+    total_referrals: Optional[int] = 0
+    payout_method: Optional[str] = None
+    payout_details: Optional[str] = None
     created_at: str
 
 class LessonCreate(BaseModel):
@@ -157,6 +163,26 @@ class CancelSubscriptionRequest(BaseModel):
     user_email: str
     course_id: str
 
+# ============= AFFILIATE MODELS =============
+
+class AffiliatePayoutRequest(BaseModel):
+    amount: float
+
+class AffiliatePayoutMethodUpdate(BaseModel):
+    payout_method: str  # paypal, wise, iban
+    payout_details: str  # email, wise email, or IBAN number
+
+class AffiliateCommissionUpdate(BaseModel):
+    commission_percent: float
+
+class AffiliateResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    affiliate_code: str
+    affiliate_balance: float
+    total_earned: float
+    total_referrals: int
+    commission_percent: float
+
 class AssignCourseRequest(BaseModel):
     user_id: str
     course_id: str
@@ -202,6 +228,7 @@ class SiteSettings(BaseModel):
     footer_text: str = "© 2024 Continental Academy. Sva prava zadržana."
     nav_links: List[Dict[str, str]] = []
     pricing_plans: List[Dict[str, Any]] = []
+    affiliate_commission_percent: float = 25.0  # Default 25%
 
 class ShopProductCreate(BaseModel):
     title: str
@@ -298,11 +325,25 @@ async def get_optional_user(credentials: HTTPAuthorizationCredentials = Depends(
 
 # ============= AUTH ROUTES =============
 
+def generate_affiliate_code():
+    """Generate unique 8-character affiliate code"""
+    import random
+    import string
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+
 @api_router.post("/auth/register")
-async def register(data: UserCreate):
+async def register(data: UserCreate, request: Request):
     existing = await db.users.find_one({"email": data.email})
     if existing:
         raise HTTPException(status_code=400, detail="Email već postoji")
+    
+    # Generate unique affiliate code
+    affiliate_code = generate_affiliate_code()
+    while await db.users.find_one({"affiliate_code": affiliate_code}):
+        affiliate_code = generate_affiliate_code()
+    
+    # Check for referrer from cookie (will be set by frontend)
+    referred_by = None
     
     user_id = str(uuid.uuid4())
     user = {
@@ -312,6 +353,12 @@ async def register(data: UserCreate):
         "name": data.name,
         "role": "user",
         "subscription_status": "inactive",
+        "affiliate_code": affiliate_code,
+        "affiliate_balance": 0.0,
+        "total_earned": 0.0,
+        "total_referrals": 0,
+        "referred_by": referred_by,
+        "stripe_connect_id": None,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.users.insert_one(user)
@@ -324,7 +371,11 @@ async def register(data: UserCreate):
             "email": data.email,
             "name": data.name,
             "role": "user",
-            "subscription_status": "inactive"
+            "subscription_status": "inactive",
+            "affiliate_code": affiliate_code,
+            "affiliate_balance": 0.0,
+            "total_earned": 0.0,
+            "total_referrals": 0
         }
     }
 
@@ -342,7 +393,11 @@ async def login(data: UserLogin):
             "email": user['email'],
             "name": user['name'],
             "role": user['role'],
-            "subscription_status": user['subscription_status']
+            "subscription_status": user['subscription_status'],
+            "affiliate_code": user.get('affiliate_code'),
+            "affiliate_balance": user.get('affiliate_balance', 0.0),
+            "total_earned": user.get('total_earned', 0.0),
+            "total_referrals": user.get('total_referrals', 0)
         }
     }
 
@@ -1048,6 +1103,13 @@ async def stripe_webhook(request: Request):
                         }},
                         upsert=True
                     )
+                    
+                    # Credit affiliate commission (only first purchase)
+                    await credit_affiliate_commission(
+                        subscription_record['user_id'],
+                        subscription_record['amount'],
+                        subscription_record['course_id']
+                    )
         
         elif event_type == 'customer.subscription.deleted':
             # Subscription was cancelled
@@ -1212,6 +1274,307 @@ async def submit_contact(data: ContactMessage):
 async def get_messages(admin: dict = Depends(get_admin_user)):
     messages = await db.contact_messages.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
     return messages
+
+# ============= AFFILIATE ROUTES =============
+
+@api_router.get("/affiliate/stats")
+async def get_affiliate_stats(user: dict = Depends(get_current_user)):
+    """Get affiliate stats for current user"""
+    # Generate affiliate code if user doesn't have one
+    if not user.get('affiliate_code'):
+        affiliate_code = generate_affiliate_code()
+        while await db.users.find_one({"affiliate_code": affiliate_code}):
+            affiliate_code = generate_affiliate_code()
+        await db.users.update_one(
+            {"id": user['id']},
+            {"$set": {
+                "affiliate_code": affiliate_code,
+                "affiliate_balance": user.get('affiliate_balance', 0.0),
+                "total_earned": user.get('total_earned', 0.0),
+                "total_referrals": user.get('total_referrals', 0)
+            }}
+        )
+        user['affiliate_code'] = affiliate_code
+    
+    settings = await db.site_settings.find_one({}, {"_id": 0})
+    commission_percent = settings.get('affiliate_commission_percent', 25.0) if settings else 25.0
+    
+    # Get referral history
+    referrals = await db.affiliate_referrals.find(
+        {"affiliate_user_id": user['id']}, 
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    
+    # Get pending payout requests
+    pending_payouts = await db.affiliate_payouts.find(
+        {"user_id": user['id'], "status": "pending"},
+        {"_id": 0}
+    ).to_list(10)
+    
+    return {
+        "affiliate_code": user.get('affiliate_code'),
+        "affiliate_balance": user.get('affiliate_balance', 0.0),
+        "total_earned": user.get('total_earned', 0.0),
+        "total_referrals": user.get('total_referrals', 0),
+        "commission_percent": commission_percent,
+        "payout_method": user.get('payout_method'),
+        "payout_details": user.get('payout_details'),
+        "pending_payouts": pending_payouts,
+        "referrals": referrals,
+        "min_payout": 50.0
+    }
+
+@api_router.post("/affiliate/track/{affiliate_code}")
+async def track_affiliate_click(affiliate_code: str, request: Request):
+    """Track when someone clicks an affiliate link - returns affiliate user_id to store in cookie"""
+    affiliate_user = await db.users.find_one({"affiliate_code": affiliate_code}, {"_id": 0})
+    if not affiliate_user:
+        raise HTTPException(status_code=404, detail="Affiliate kod nije pronađen")
+    
+    # Log the click
+    click_log = {
+        "id": str(uuid.uuid4()),
+        "affiliate_code": affiliate_code,
+        "affiliate_user_id": affiliate_user['id'],
+        "ip": request.client.host if request.client else "unknown",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.affiliate_clicks.insert_one(click_log)
+    
+    return {
+        "affiliate_user_id": affiliate_user['id'],
+        "expires_days": 30
+    }
+
+@api_router.post("/affiliate/update-payout-method")
+async def update_payout_method(data: AffiliatePayoutMethodUpdate, user: dict = Depends(get_current_user)):
+    """Update user's payout method (PayPal, Wise, IBAN)"""
+    if data.payout_method not in ['paypal', 'wise', 'iban']:
+        raise HTTPException(status_code=400, detail="Nevažeća metoda isplate. Odaberite: paypal, wise ili iban")
+    
+    if not data.payout_details or len(data.payout_details) < 5:
+        raise HTTPException(status_code=400, detail="Molimo unesite validne podatke za isplatu")
+    
+    await db.users.update_one(
+        {"id": user['id']},
+        {"$set": {
+            "payout_method": data.payout_method,
+            "payout_details": data.payout_details
+        }}
+    )
+    
+    return {"message": f"Metoda isplate ažurirana na {data.payout_method}"}
+
+@api_router.post("/affiliate/payout")
+async def request_affiliate_payout(data: AffiliatePayoutRequest, user: dict = Depends(get_current_user)):
+    """Request manual payout of affiliate earnings (minimum 50€)"""
+    MIN_PAYOUT = 50.0
+    
+    if user.get('affiliate_balance', 0) < data.amount:
+        raise HTTPException(status_code=400, detail="Nedovoljno sredstava")
+    
+    if data.amount < MIN_PAYOUT:
+        raise HTTPException(status_code=400, detail=f"Minimalni iznos za isplatu je €{MIN_PAYOUT}")
+    
+    if not user.get('payout_method') or not user.get('payout_details'):
+        raise HTTPException(status_code=400, detail="Molimo prvo unesite podatke za isplatu (PayPal, Wise ili IBAN)")
+    
+    # Check for existing pending payout
+    existing_pending = await db.affiliate_payouts.find_one({
+        "user_id": user['id'],
+        "status": "pending"
+    })
+    if existing_pending:
+        raise HTTPException(status_code=400, detail="Već imate zahtjev za isplatu na čekanju")
+    
+    # Create payout request
+    payout_request = {
+        "id": str(uuid.uuid4()),
+        "user_id": user['id'],
+        "user_email": user['email'],
+        "user_name": user['name'],
+        "amount": data.amount,
+        "payout_method": user['payout_method'],
+        "payout_details": user['payout_details'],
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.affiliate_payouts.insert_one(payout_request)
+    
+    # Deduct from balance
+    new_balance = user.get('affiliate_balance', 0) - data.amount
+    await db.users.update_one(
+        {"id": user['id']},
+        {"$set": {"affiliate_balance": new_balance}}
+    )
+    
+    return {
+        "message": f"Zahtjev za isplatu €{data.amount} je poslan. Admin će obraditi vaš zahtjev.",
+        "new_balance": new_balance
+    }
+
+async def credit_affiliate_commission(buyer_user_id: str, amount: float, course_id: str):
+    """Credit affiliate commission when someone makes a purchase"""
+    # Get the buyer
+    buyer = await db.users.find_one({"id": buyer_user_id}, {"_id": 0})
+    if not buyer or not buyer.get('referred_by'):
+        return
+    
+    # Check if this is first purchase for this course (not renewal)
+    existing_purchase = await db.affiliate_referrals.find_one({
+        "referred_user_id": buyer_user_id,
+        "course_id": course_id
+    })
+    if existing_purchase:
+        return  # Already credited for this course
+    
+    # Get affiliate user
+    affiliate = await db.users.find_one({"id": buyer['referred_by']}, {"_id": 0})
+    if not affiliate:
+        return
+    
+    # Get commission rate from settings
+    settings = await db.site_settings.find_one({}, {"_id": 0})
+    commission_percent = settings.get('affiliate_commission_percent', 25.0) if settings else 25.0
+    
+    commission = amount * (commission_percent / 100)
+    
+    # Update affiliate balance
+    await db.users.update_one(
+        {"id": affiliate['id']},
+        {
+            "$inc": {
+                "affiliate_balance": commission,
+                "total_earned": commission,
+                "total_referrals": 1
+            }
+        }
+    )
+    
+    # Log the referral
+    referral_log = {
+        "id": str(uuid.uuid4()),
+        "affiliate_user_id": affiliate['id'],
+        "referred_user_id": buyer_user_id,
+        "course_id": course_id,
+        "purchase_amount": amount,
+        "commission_amount": commission,
+        "commission_percent": commission_percent,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.affiliate_referrals.insert_one(referral_log)
+
+@api_router.post("/affiliate/set-referrer")
+async def set_referrer(affiliate_user_id: str, user: dict = Depends(get_current_user)):
+    """Set the referrer for current user (called from frontend when affiliate cookie exists)"""
+    # Only set if not already referred
+    if user.get('referred_by'):
+        return {"message": "Već imate referrera"}
+    
+    # Check if affiliate exists
+    affiliate = await db.users.find_one({"id": affiliate_user_id}, {"_id": 0})
+    if not affiliate:
+        raise HTTPException(status_code=404, detail="Affiliate nije pronađen")
+    
+    # Can't refer yourself
+    if affiliate['id'] == user['id']:
+        return {"message": "Ne možete biti svoj referrer"}
+    
+    await db.users.update_one(
+        {"id": user['id']},
+        {"$set": {"referred_by": affiliate_user_id}}
+    )
+    
+    return {"message": "Referrer postavljen"}
+
+# ============= ADMIN AFFILIATE ROUTES =============
+
+@api_router.get("/admin/affiliates")
+async def get_all_affiliates(admin: dict = Depends(get_admin_user)):
+    """Get all users with affiliate stats"""
+    users = await db.users.find(
+        {},
+        {"_id": 0, "password": 0}
+    ).to_list(1000)
+    
+    # Filter users with affiliate activity
+    affiliates = [u for u in users if u.get('total_earned', 0) > 0 or u.get('affiliate_balance', 0) > 0]
+    
+    return affiliates
+
+@api_router.put("/admin/affiliate-commission")
+async def update_affiliate_commission(data: AffiliateCommissionUpdate, admin: dict = Depends(get_admin_user)):
+    """Update global affiliate commission percentage"""
+    if data.commission_percent < 0 or data.commission_percent > 100:
+        raise HTTPException(status_code=400, detail="Procenat mora biti između 0 i 100")
+    
+    await db.site_settings.update_one(
+        {},
+        {"$set": {"affiliate_commission_percent": data.commission_percent}},
+        upsert=True
+    )
+    
+    return {"message": f"Provizija ažurirana na {data.commission_percent}%"}
+
+@api_router.get("/admin/affiliate-payouts")
+async def get_affiliate_payouts(admin: dict = Depends(get_admin_user)):
+    """Get all affiliate payout requests"""
+    payouts = await db.affiliate_payouts.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    
+    # Enrich with user info
+    for payout in payouts:
+        user = await db.users.find_one({"id": payout['user_id']}, {"_id": 0, "password": 0})
+        payout['user'] = user
+    
+    return payouts
+
+@api_router.post("/admin/affiliate-payout/{payout_id}/complete")
+async def complete_affiliate_payout(payout_id: str, admin: dict = Depends(get_admin_user)):
+    """Mark a payout request as completed"""
+    payout = await db.affiliate_payouts.find_one({"id": payout_id})
+    if not payout:
+        raise HTTPException(status_code=404, detail="Zahtjev za isplatu nije pronađen")
+    
+    if payout['status'] == 'completed':
+        raise HTTPException(status_code=400, detail="Isplata je već označena kao završena")
+    
+    await db.affiliate_payouts.update_one(
+        {"id": payout_id},
+        {"$set": {
+            "status": "completed",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "completed_by": admin['email']
+        }}
+    )
+    
+    return {"message": f"Isplata od €{payout['amount']} za {payout['user_email']} označena kao završena"}
+
+@api_router.post("/admin/affiliate-payout/{payout_id}/reject")
+async def reject_affiliate_payout(payout_id: str, admin: dict = Depends(get_admin_user)):
+    """Reject a payout request and return balance to user"""
+    payout = await db.affiliate_payouts.find_one({"id": payout_id})
+    if not payout:
+        raise HTTPException(status_code=404, detail="Zahtjev za isplatu nije pronađen")
+    
+    if payout['status'] != 'pending':
+        raise HTTPException(status_code=400, detail="Samo pending zahtjevi mogu biti odbijeni")
+    
+    # Return balance to user
+    await db.users.update_one(
+        {"id": payout['user_id']},
+        {"$inc": {"affiliate_balance": payout['amount']}}
+    )
+    
+    await db.affiliate_payouts.update_one(
+        {"id": payout_id},
+        {"$set": {
+            "status": "rejected",
+            "rejected_at": datetime.now(timezone.utc).isoformat(),
+            "rejected_by": admin['email']
+        }}
+    )
+    
+    return {"message": f"Isplata odbijena. €{payout['amount']} vraćeno na balans korisnika."}
 
 # ============= ROOT =============
 
