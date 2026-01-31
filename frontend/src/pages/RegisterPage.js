@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import ReCAPTCHA from 'react-google-recaptcha';
 
-const RECAPTCHA_SITE_KEY = 'SITE_KEY_OVDJE';
+const RECAPTCHA_SITE_KEY = '6Ldir1ssAAAAAGq7J_Ghx-xlnPPJ1Ww5te65ICL5';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
