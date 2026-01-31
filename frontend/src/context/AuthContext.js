@@ -59,8 +59,13 @@ export const AuthProvider = ({ children }) => {
     return userData;
   };
 
-  const register = async (email, password, name) => {
-    const response = await axios.post(`${API}/auth/register`, { email, password, name });
+  const register = async (email, password, name, captchaToken) => {
+    const response = await axios.post(`${API}/auth/register`, { 
+      email, 
+      password, 
+      name, 
+      captcha_token: captchaToken 
+    });
     const { token: newToken, user: userData } = response.data;
     localStorage.setItem('token', newToken);
     setToken(newToken);
