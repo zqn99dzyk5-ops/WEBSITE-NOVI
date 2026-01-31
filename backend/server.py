@@ -5,6 +5,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
@@ -26,6 +27,9 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ.get('JWT_SECRET', 'continental-academy-secret-key-2024')
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = 24
+
+# reCAPTCHA Config
+RECAPTCHA_SECRET_KEY = os.environ.get('RECAPTCHA_SECRET_KEY', '')
 
 # Stripe Config
 STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', 'sk_test_emergent')
@@ -88,6 +92,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     name: str
+    captcha_token: str
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -333,6 +338,20 @@ def generate_affiliate_code():
 
 @api_router.post("/auth/register")
 async def register(data: UserCreate, request: Request):
+    # Verify reCAPTCHA
+    if RECAPTCHA_SECRET_KEY:
+        async with httpx.AsyncClient() as client:
+            recaptcha_response = await client.post(
+                'https://www.google.com/recaptcha/api/siteverify',
+                data={
+                    'secret': RECAPTCHA_SECRET_KEY,
+                    'response': data.captcha_token
+                }
+            )
+            result = recaptcha_response.json()
+            if not result.get('success'):
+                raise HTTPException(status_code=400, detail="CAPTCHA verifikacija nije uspjela. Molimo pokušajte ponovo.")
+    
     existing = await db.users.find_one({"email": data.email})
     if existing:
         raise HTTPException(status_code=400, detail="Email već postoji")
