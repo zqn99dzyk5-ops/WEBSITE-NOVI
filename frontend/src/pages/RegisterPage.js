@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -6,6 +6,9 @@ import { Eye, EyeOff, Mail, Lock, User, ArrowRight } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
+import ReCAPTCHA from 'react-google-recaptcha';
+
+const RECAPTCHA_SITE_KEY = 'SITE_KEY_OVDJE';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -16,6 +19,12 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState(null);
+  const recaptchaRef = useRef(null);
+
+  const handleCaptchaChange = (token) => {
+    setCaptchaToken(token);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -35,14 +44,24 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!captchaToken) {
+      toast.error('Molimo potvrdite da niste robot');
+      return;
+    }
+
     setLoading(true);
     try {
-      const user = await register(email, password, name);
+      const user = await register(email, password, name, captchaToken);
       toast.success(`Dobrodošli, ${user.name}!`);
       navigate('/dashboard');
     } catch (error) {
       console.error('Register error:', error);
       toast.error(error.response?.data?.detail || 'Greška pri registraciji');
+      // Reset captcha on error
+      if (recaptchaRef.current) {
+        recaptchaRef.current.reset();
+      }
+      setCaptchaToken(null);
     } finally {
       setLoading(false);
     }
@@ -150,9 +169,19 @@ export default function RegisterPage() {
               </div>
             </div>
 
+            {/* reCAPTCHA */}
+            <div className="flex justify-center">
+              <ReCAPTCHA
+                ref={recaptchaRef}
+                sitekey={RECAPTCHA_SITE_KEY}
+                onChange={handleCaptchaChange}
+                theme="dark"
+              />
+            </div>
+
             <Button
               type="submit"
-              disabled={loading}
+              disabled={loading || !captchaToken}
               className="w-full h-12 btn-gradient text-base"
               data-testid="register-submit"
             >
