@@ -134,12 +134,6 @@ export default function LoginPage() {
             </p>
           </div>
         </div>
-
-        {/* Admin hint */}
-        <div className="mt-4 text-center">
-          <p className="text-white/30 text-sm">
-          </p>
-        </div>
       </motion.div>
     </div>
   );
